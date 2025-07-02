@@ -1,61 +1,65 @@
 import numpy as np
 import abc
-import time
 import torch
 
 
 class Kernel(metaclass=abc.ABCMeta):
-    def __init__(self,gamma):
-        self.gamma    = gamma
-    
-    def setGamma(self,gamma):
-        self.gamma = gamma
+    def __init__(self):
+        super().__init__()
+        #self.gamma = gamma
 
     @abc.abstractmethod
     def phi(self,r): 
         pass    
+
     @abc.abstractmethod
     def phiR(self,r): # phi'/r
-        pass    
+        pass   
+
     @abc.abstractmethod # phiR'/r
     def phiRR(self,r): 
         pass         
 
-    def powerFunc(self,y,x):
+    def powerFunc(self,y,x, newGamma=None):
         if y.ndim < 2:
             if y.ndim == 1: 
                 y = y[:, np.newaxis]
             else:
                 y = np.reshape(y, (1, -1))
         
-        Kxx = self.getGramHermite(x,x)
-        Kxy = self.getGramHermite(y,x)
-        Kyy = self.getGramHermite(y,y)
+        Kxx = self.getGramHermite(x,x, newGamma=newGamma)
+        Kxy = self.getGramHermite(y,x, newGamma=newGamma)
+        Kyy = self.getGramHermite(y,y, newGamma=newGamma)
         return np.max(np.sqrt(np.abs(np.diag(Kyy)-np.sum(np.linalg.solve(Kxx,Kxy.T)*Kxy.T,0))))
     
-    def powerFuncSingle(self,y,x):
+    def powerFuncSingle(self,y,x, newGamma=None):
         if y.ndim < 2:
             if y.ndim == 1: 
                 y = y[:, np.newaxis]
             else:
                 y = np.reshape(y, (1, -1))
 
-        Kxx = self.getGramHermite(x,x)
-        Kxy = self.getGramHermite(y,x)
-        Kyy = self.getGramHermite(y,y)
+        Kxx = self.getGramHermite(x,x, newGamma=newGamma)
+        Kxy = self.getGramHermite(y,x, newGamma=newGamma)
+        Kyy = self.getGramHermite(y,y, newGamma=newGamma)
         return np.sqrt(np.abs(np.diag(Kyy)-np.sum(np.linalg.solve(Kxx,Kxy.T)*Kxy.T,0)))[0]
 
-    def getRKHSNorm(self,x,rhs):
-        return np.sqrt(np.sum(np.linalg.solve(self.getGramHermite(x,x),rhs)*rhs))
+    def getRKHSNorm(self,x,rhs, newGamma=None):
+        return np.sqrt(np.sum(np.linalg.solve(self.getGramHermite(x,x, newGamma=newGamma),rhs)*rhs))
 
-    def getGramHermite(self,y,x):
+    def getGramHermite(self,y,x, newGamma=None):
+        oldGamma = self.gamma
+
+        if newGamma is not None:
+            self.gamma = newGamma
+
         if y.ndim < 2:
             if y.ndim == 1: 
                 y = y[:, np.newaxis]
             else:
                 y = np.reshape(y, (1, -1))
 
-        diff  = np.sqrt( np.abs(np.sum(x**2, axis=0, keepdims=True)  + np.sum(y**2, axis=0, keepdims=True).T  - 2 * y.T @ x ) )      
+        diff  = np.sqrt(np.abs(np.sum(x**2, axis=0, keepdims=True)  + np.sum(y**2, axis=0, keepdims=True).T  - 2 * y.T @ x))      
         K     = self.phi(diff)
         phiR  = self.phiR(diff)       
         phiRR = self.phiRR(diff)  
@@ -75,6 +79,9 @@ class Kernel(metaclass=abc.ABCMeta):
         I              = np.eye(N)
         C_blocks       = - phiRR[:, :, None, None] * outer - phiR[:, :, None, None] * I  
         C              = C_blocks.transpose(0, 2, 1, 3).reshape(ny * N, nx * N)
+
+        self.gamma = oldGamma
+
         return np.r_[np.c_[K, B1], np.c_[B2, C]] 
  
     def getGramHermiteTorch(self, y, x, newGamma=None):
@@ -94,9 +101,14 @@ class Kernel(metaclass=abc.ABCMeta):
         )
 
         # Compute kernel matrices using self.phi, self.phiR, self.phiRR
-        K     = self.phiTorch(diff)   # shape: (ny, nx)
-        phiR  = self.phiRTorch(diff)  # shape: (ny, nx)
-        phiRR = self.phiRRTorch(diff) # shape: (ny, nx)
+        if newGamma is not None: 
+            K     = self.phiTorch(diff, newGamma)   # shape: (ny, nx)
+            phiR  = self.phiRTorch(diff, newGamma)  # shape: (ny, nx)
+            phiRR = self.phiRRTorch(diff, newGamma) # shape: (ny, nx)
+        else:
+            K     = self.phiTorch(diff)   # shape: (ny, nx)
+            phiR  = self.phiRTorch(diff)  # shape: (ny, nx)
+            phiRR = self.phiRRTorch(diff) # shape: (ny, nx)
 
         nx = x.shape[1]
         ny = y.shape[1]
@@ -142,7 +154,12 @@ class Kernel(metaclass=abc.ABCMeta):
         return torch.cat([top, bottom], dim=0)
 
 
-    def evalGrad(self, y, x, alpha):
+    def evalGrad(self, y, x, alpha, newGamma=None):
+        oldGamma = self.gamma
+        
+        if newGamma is not None:
+            self.gamma = newGamma
+
         if y.ndim < 2:
             if y.ndim == 1: 
                 #y = y.reshape(-1,1)
@@ -168,34 +185,43 @@ class Kernel(metaclass=abc.ABCMeta):
         C_blocks       = - phiRR[:, :, None, None] * outer - phiR[:, :, None, None] * I  
         C              = C_blocks.transpose(0, 2, 1, 3).reshape(ny * N, nx * N)
 
+        self.gamma = oldGamma
+
         return np.c_[B2, C] @ alpha
     
 
-    def evalFunc(self,y,x,alpha):
+    def evalFunc(self,y,x,alpha,newGamma=None):
+        oldGamma = self.gamma
+        
+        if newGamma is not None:
+            self.gamma = newGamma
+            
         if y.ndim < 2:
             if y.ndim == 1: 
                 y = y[:, np.newaxis]
             else:
                 y = np.reshape(y, (1, -1))
 
-        diff       = np.sqrt( np.abs(np.sum(x**2, axis=0, keepdims=True)  + np.sum(y**2, axis=0, keepdims=True).T  - 2 * y.T @ x ) )      
+        diff       = np.sqrt( np.abs(np.sum(x**2, axis=0, keepdims=True)  + np.sum(y**2, axis=0, keepdims=True).T  - 2 * y.T @ x ))
         K          = self.phi(diff)
-        phiR       = self.phiR(diff) 
-
+        phiR       = self.phiR(diff)
+        
         nx         = x.shape[1]
         ny         = y.shape[1]
         N          = x.shape[0]
+
         diff_tensor    = x[:, None, :] - y[:, :, None]  
         weighted_diff  = phiR[None, :, :] * diff_tensor   
         B1             = weighted_diff.transpose(1, 2, 0).reshape(ny, nx * N)
+        self.gamma     = oldGamma
         return (np.c_[K, B1] @ alpha)[0,0]
 
     def evalFuncTorch(self, y, x, alpha, newGamma=None):
         oldGamma = self.gamma
-
+        
         if newGamma is not None:
             self.gamma = newGamma
-
+            
         # Compute the pairwise Euclidean distances between columns of x and y.
         # x: (N, nx), y: (N, ny)
         diff = torch.sqrt(
@@ -207,8 +233,12 @@ class Kernel(metaclass=abc.ABCMeta):
         )
 
         # Evaluate the kernel and its derivative
-        K = self.phiTorch(diff)    # Expected shape: (ny, nx)
-        phiR = self.phiRTorch(diff)  # Expected shape: (ny, nx)
+        if newGamma is not None:
+            K = self.phiTorch(diff, newGamma)    # Expected shape: (ny, nx)
+            phiR = self.phiRTorch(diff, newGamma)  # Expected shape: (ny, nx)
+        else: 
+            K = self.phiTorch(diff)    # Expected shape: (ny, nx)
+            phiR = self.phiRTorch(diff)  # Expected shape: (ny, nx)
 
         nx = x.shape[1]
         ny = y.shape[1]
@@ -269,32 +299,113 @@ class Kernel(metaclass=abc.ABCMeta):
 
 class QuadWendland(Kernel):
     def __init__(self,gamma,d):
-        self.l        = np.floor(d/2)+ 2 +1 
+        super().__init__()
+        self.l        = np.floor(d/2)+ 2 + 1 
         self.gamma    = gamma
-    def phi(self,r):   return (self.gamma*r<=1) * (1-self.gamma*r)**(self.l+2) * ((self.l**2+4*self.l+3)*(self.gamma*r)**2+(3*self.l+6)*self.gamma*r+3)  
-    def phiR(self,r):  return (self.gamma*r<=1) * (1-self.gamma*r)**(self.l+1) * (-self.gamma**2) * (12+7*self.l+self.l**2)*(1+(1+self.l)*self.gamma*r)
-    def phiRR(self,r): return (self.gamma*r<=1) * (1-self.gamma*r)**(self.l) * self.gamma**4 * (24 + 50 * self.l + 35 *  self.l**2 + 10 *  self.l**3 + self.l**4) 
+        
+    def phi(self,r):   return (np.math.factorial(int(self.l + 2*2)) / np.math.factorial(int(self.l))) * (self.gamma*r<=1) * (1-self.gamma*r)**(self.l+2) * ((self.l**2+4*self.l+3)*(self.gamma*r)**2+(3*self.l+6)*self.gamma*r+3)  
+    def phiR(self,r):  return (np.math.factorial(int(self.l + 2*2)) / np.math.factorial(int(self.l))) *(self.gamma*r<=1) * (1-self.gamma*r)**(self.l+1) * (-self.gamma**2) * (12+7*self.l+self.l**2)*(1+(1+self.l)*self.gamma*r)
+    def phiRR(self,r): return (np.math.factorial(int(self.l + 2*2)) / np.math.factorial(int(self.l))) * (self.gamma*r<=1) * (1-self.gamma*r)**(self.l) * self.gamma**4 * (24 + 50 * self.l + 35 *  self.l**2 + 10 *  self.l**3 + self.l**4) 
 
 
 class QuadMatern(Kernel):
-    def phi(self,r):   return np.exp(-self.gamma*r)*(3+3*self.gamma*r+self.gamma**2 *r**2)   
-    def phiR(self,r):  return (-1)*np.exp(-self.gamma*r)*(1+self.gamma*r) * self.gamma**2 
-    def phiRR(self,r): return self.gamma**4 * np.exp(-self.gamma*r) 
+    def __init__(self, gamma):
+        self.gamma = gamma 
+        super().__init__()
+
+    def phi(self,r):   
+        return np.exp(-self.gamma*r)*(3+3*self.gamma*r+self.gamma**2 *r**2)  
+     
+    def phiR(self,r):  
+        return (-1)*np.exp(-self.gamma*r)*(1+self.gamma*r) * self.gamma**2 
+    
+    def phiRR(self,r): 
+        return self.gamma**4 * np.exp(-self.gamma*r) 
+    
+    def phiTorch(self,r, gamma=None): 
+        if gamma is None:
+            return torch.exp(-self.gamma * r) * (3 + 3 * self.gamma * r + (self.gamma ** 2) * (r ** 2))
+        else: 
+            return torch.exp(- gamma * r) * (3 + 3 * gamma * r + (gamma ** 2) * (r ** 2))
+    
+    def phiRTorch(self, r, gamma=None): 
+        if gamma is None:
+            return (-1) * torch.exp(-self.gamma * r) * (1 + self.gamma * r) * (self.gamma ** 2)
+        else: 
+            return (-1) * torch.exp(-gamma * r) * (1 + gamma * r) * (gamma ** 2)
+    
+    def phiRRTorch(self, r, gamma=None): 
+        if gamma is None:
+            return (self.gamma ** 4) * torch.exp(-self.gamma * r)
+        else: 
+            return  (gamma ** 4) * torch.exp(-gamma * r)
 
 class Gauss(Kernel):
-    def phi(self,r):        return np.exp(-self.gamma*(r**2)) 
-    def phiR(self,r):       return (-2)*self.gamma*np.exp(-self.gamma*(r**2)) 
-    def phiRR(self,r):      return 4*self.gamma**2 * np.exp(-self.gamma*(r**2)) 
-    def phiTorch(self,r):   return torch.exp(-self.gamma*(r**2)) 
-    def phiRTorch(self,r):  return (-2)*self.gamma*torch.exp(-self.gamma*(r**2)) 
-    def phiRRTorch(self,r): return 4*self.gamma**2 * torch.exp(-self.gamma*(r**2)) 
+    def __init__(self, gamma):
+        self.gamma = gamma 
+        super().__init__()
+
+    def phi(self,r):  
+        return np.exp(-self.gamma*(r**2)) 
+    
+    def phiR(self,r):       
+        return (-2)*self.gamma*np.exp(-self.gamma*(r**2)) 
+    
+    def phiRR(self,r):      
+        return 4*self.gamma**2 * np.exp(-self.gamma*(r**2)) 
+
+    def phiTorch(self,r, gamma=None):
+        if gamma is None: 
+            return torch.exp(-self.gamma*(r**2)) 
+        else:
+            return torch.exp(-gamma*(r**2)) 
+        
+    def phiRTorch(self,r, gamma=None):  
+        if gamma is None:
+            return (-2)*self.gamma*torch.exp(-self.gamma*(r**2)) 
+        else:
+            return (-2)*gamma*torch.exp(gamma*(r**2))
+        
+    def phiRRTorch(self,r, gamma=None): 
+        if gamma is None:
+            return 4*self.gamma**2 * torch.exp(-self.gamma*(r**2))
+        else:
+            return 4*gamma**2 * torch.exp(-gamma*(r**2))
+        
 
 class InvMulti(Kernel):
-    def phi(self,r):   return 1/np.sqrt(1+self.gamma*(r**2)) 
-    def phiR(self,r):  return (-1)*self.gamma* (1/np.sqrt((1+self.gamma*(r**2))**3)) 
-    def phiRR(self,r): return 3*self.gamma**2 * (1/np.sqrt((1+self.gamma*(r**2))**5)) 
+    def __init__(self, gamma):
+        self.gamma = gamma 
+        super().__init__()
+    
+    def phi(self,r):        return 1/np.sqrt(1+self.gamma*(r**2)) 
+    def phiR(self,r):       return (-1)*self.gamma* (1/np.sqrt((1+self.gamma*(r**2))**3)) 
+    def phiRR(self,r):      return 3*self.gamma**2 * (1/np.sqrt((1+self.gamma*(r**2))**5)) 
+
+    def phiTorch(self,r, gamma=None): 
+        if gamma is None:  
+            return 1 / torch.sqrt(1 + self.gamma * (r ** 2))
+        else: 
+            return 1 / torch.sqrt(1 + gamma * (r ** 2))
+        
+    def phiRTorch(self,r, gamma=None):  
+        if gamma is None: 
+            return -self.gamma / torch.sqrt((1 + self.gamma * (r ** 2))**3)
+        else: 
+            return -gamma / torch.sqrt((1 + gamma * (r ** 2))**3)
+        
+    def phiRRTorch(self,r, gamma=None): 
+        if gamma is None: 
+            return 3 * self.gamma**2 / torch.sqrt((1 + self.gamma * (r ** 2))**5)
+        else: 
+            return 3 * gamma**2 / torch.sqrt((1 + gamma * (r ** 2))**5)
+        
 
 class LinMatern(Kernel):
+    def __init__(self, gamma):
+        self.gamma = gamma 
+        super().__init__()
+
     def phi(self,r):   return np.exp(-self.gamma*r)*(1+self.gamma*r)   
     def phiR(self,r):  return (-1)*np.exp(-self.gamma*r)*self.gamma**2 
     def phiRR(self,r): 
