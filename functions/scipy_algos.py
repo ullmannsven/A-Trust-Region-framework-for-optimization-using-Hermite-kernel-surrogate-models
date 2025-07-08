@@ -231,7 +231,6 @@ def optimize(J, data, mu, method, model=None):
                       method = 'L-BFGS-B',
                       jac = partial(record_results_jac, fom_gradient_of_functional, data, model),
                       bounds = (ranges_door, ranges_door, ranges_heater, ranges_heater, ranges_heater, ranges_heater, ranges_heater, ranges_heater, ranges_heater, ranges_wall, ranges_wall, ranges_wall),
-                      bounds = [ranges],
                       options = {'gtol': 5e-4, 'ftol':1e-12})
             
         elif method == 'trust-constr': 

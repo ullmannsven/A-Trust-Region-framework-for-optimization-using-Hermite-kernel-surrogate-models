@@ -44,39 +44,6 @@ def projection_onto_range(model, X_train):
         
     return X_train_new
 
-def active_and_inactive_sets(model, mu, epsilon):
-
-    Act    = []
-
-    if model.pyMOR:
-
-        mu     = model.fom.parameters.parse(mu)
-        ranges = model.parameter_space.ranges
-
-        for (key,val) in model.parameter_space.parameters.items():
-            range_ = ranges[key]
-            for j in range(val):
-                if mu[key][j] - range_[0] <= epsilon:
-                    Act.append(1.0)
-                elif range_[1] - mu[key][j] <= epsilon:
-                    Act.append(1.0)
-                else:
-                    Act.append(0.0)
-
-    else: #the 1D case
-        range_ = model.parameter_space
-        if mu[0,0] - range_[0] <= epsilon: 
-            Act.append(1.0)
-        elif range_[1] - mu[0,0] <= epsilon: 
-            Act.append(1.0)
-        else: 
-            Act.append(0.0)
-
-    Act   = np.array(Act)
-    Inact = np.ones(Act.shape) - Act
-
-    return Act, Inact
-
 
 def computeDataForRKHSNorm(model, TR_parameters):
     from pymor.tools.random import new_rng
@@ -98,8 +65,7 @@ def computeDataForRKHSNorm(model, TR_parameters):
 
     return  train_values, np.r_[target_values, grad_target_values.flatten(order='F').reshape(-1,1)]
 
-#war auf 1e20 für 12D, geändert auf 1e17 für 1D
-def remove_similar_points(X_train, y_train, grad_y_train, kernel, gamma, cond_threshold=1e21):
+def remove_similar_points(X_train, y_train, grad_y_train, kernel, gamma, TR_parameters):
     """
     Remove points from the training set until the condition number of the Gram matrix,
     computed with kernel.getGramHermite on the features (all rows except the last),
@@ -118,6 +84,7 @@ def remove_similar_points(X_train, y_train, grad_y_train, kernel, gamma, cond_th
       Updated (X_train, y_train, grad_y_train) with points removed.
     """
     # Compute initial Gram matrix and condition number.
+    cond_threshold = TR_parameters['cond_threshold']
     gram = kernel.getGramHermite(X_train[:-1, :], X_train[:-1, :], newGamma=gamma)
     cond_num = np.linalg.cond(gram)
     
@@ -192,7 +159,7 @@ def create_training_dataset(kernel, mu_k, gradient, model, X_train, y_train, gra
         new_target_value, grad_target_value = model.getFuncAndGradient(X_train[:-1, i])
         y_train                             = np.append(y_train, np.atleast_2d(new_target_value), axis=0)
         grad_y_train                        = np.append(grad_y_train, np.atleast_2d(grad_target_value).reshape(-1,1), axis=1)
-        X_train, y_train, grad_y_train      = remove_similar_points(X_train[:, :i+1], y_train, grad_y_train, kernel, gamma=new_point[-1,0]) #
+        X_train, y_train, grad_y_train      = remove_similar_points(X_train[:, :i+1], y_train, grad_y_train, kernel, gamma=new_point[-1,0], TR_parameters=TR_parameters)
     
     return X_train, y_train, grad_y_train
 
@@ -325,19 +292,19 @@ def solve_subproblem_scipyBFGS(model, kernel, alpha, X_train, rhs, mu_k, TR_para
             if dim == 1: 
                 ranges = (-2, 2.0)
                 ranges_gamma = (0.725, 100.0)
-                result_BFGS = minimize(penalized_objective,result_BFGS_oneiter['x'], method='L-BFGS-B', bounds=(ranges, ranges_gamma), jac=partial_gradient, options = {'gtol': TR_parameters['sub_tolerance'], 'maxiter': TR_parameters['max_iterations_subproblem']})
+                result_BFGS = minimize(penalized_objective,result_BFGS_oneiter['x'], callback=callback, method='L-BFGS-B', bounds=(ranges, ranges_gamma), jac=partial_gradient, options = {'gtol': TR_parameters['sub_tolerance'], 'maxiter': TR_parameters['max_iterations_subproblem']})
 
             elif dim == 2: 
                 ranges = (0.5, np.pi)
                 ranges_gamma = (0.05, 30)
-                result_BFGS = minimize(penalized_objective, result_BFGS_oneiter['x'], method='L-BFGS-B', bounds=(ranges, ranges, ranges_gamma), jac=partial_gradient, options = {'gtol': TR_parameters['sub_tolerance'], 'maxiter': TR_parameters['max_iterations_subproblem']})
+                result_BFGS = minimize(penalized_objective, result_BFGS_oneiter['x'], callback=callback, method='L-BFGS-B', bounds=(ranges, ranges, ranges_gamma), jac=partial_gradient, options = {'gtol': TR_parameters['sub_tolerance'], 'maxiter': TR_parameters['max_iterations_subproblem']})
 
             elif dim == 12: 
                 ranges_0 = (0.05, 0.2)
                 ranges_1 = (0, 100)
                 ranges_2 = (0.025, 0.1)
                 ranges_gamma = (0.001, 100)
-                result_BFGS = minimize(penalized_objective, result_BFGS_oneiter['x'], method='L-BFGS-B', bounds=(ranges_0, ranges_0, ranges_1, ranges_1, ranges_1, ranges_1, ranges_1, ranges_1, ranges_1, ranges_2, ranges_2, ranges_2, ranges_gamma), jac=partial_gradient, options = {'gtol': TR_parameters['sub_tolerance'], 'maxiter': TR_parameters['max_iterations_subproblem']})
+                result_BFGS = minimize(penalized_objective, result_BFGS_oneiter['x'], callback=callback, method='L-BFGS-B', bounds=(ranges_0, ranges_0, ranges_1, ranges_1, ranges_1, ranges_1, ranges_1, ranges_1, ranges_1, ranges_2, ranges_2, ranges_2, ranges_gamma), jac=partial_gradient, options = {'gtol': TR_parameters['sub_tolerance'], 'maxiter': TR_parameters['max_iterations_subproblem']})
             
             else: 
                 raise NotImplementedError
@@ -350,20 +317,17 @@ def solve_subproblem_scipyBFGS(model, kernel, alpha, X_train, rhs, mu_k, TR_para
         try:
             if dim == 1: 
                 ranges = (-2, 2.0)
-                ranges_gamma = (0.725, 100.0)
-                result_BFGS_oneiter = minimize(penalized_objective, mu_k[:,0], method='L-BFGS-B', bounds=[ranges], jac=partial_grad_func_noGamma, options = {'maxiter': 1, 'disp': False})
+                result_BFGS_oneiter = minimize(penalized_objective, mu_k[:-1,0], method='L-BFGS-B', bounds=[ranges], jac=partial_grad_func_noGamma, options = {'maxiter': 1, 'disp': False})
 
             elif dim == 2: 
                 ranges = (0.5, np.pi)
-                ranges_gamma = (0.05, 30)
-                result_BFGS_oneiter = minimize(penalized_objective, mu_k[:,0], method='L-BFGS-B', bounds=(ranges, ranges), jac=partial_grad_func_noGamma, options = {'maxiter': 1, 'disp': False})
+                result_BFGS_oneiter = minimize(penalized_objective, mu_k[:-1,0], method='L-BFGS-B', bounds=(ranges, ranges), jac=partial_grad_func_noGamma, options = {'maxiter': 1, 'disp': False})
 
             elif dim == 12: 
                 ranges_0 = (0.05, 0.2)
                 ranges_1 = (0, 100)
                 ranges_2 = (0.025, 0.1)
-                ranges_gamma = (0.001, 100)
-                result_BFGS_oneiter = minimize(penalized_objective, mu_k[:,0], method='L-BFGS-B', bounds=(ranges_0, ranges_0, ranges_1, ranges_1, ranges_1, ranges_1, ranges_1, ranges_1, ranges_1, ranges_2, ranges_2, ranges_2), jac=partial_grad_func_noGamma, options = {'maxiter': 1, 'disp': False})
+                result_BFGS_oneiter = minimize(penalized_objective, mu_k[:-1,0], method='L-BFGS-B', bounds=(ranges_0, ranges_0, ranges_1, ranges_1, ranges_1, ranges_1, ranges_1, ranges_1, ranges_1, ranges_2, ranges_2, ranges_2), jac=partial_grad_func_noGamma, options = {'maxiter': 1, 'disp': False})
 
             else: 
                 raise NotImplementedError
@@ -375,20 +339,17 @@ def solve_subproblem_scipyBFGS(model, kernel, alpha, X_train, rhs, mu_k, TR_para
         try:
             if dim == 1: 
                 ranges = (-2, 2.0)
-                ranges_gamma = (0.725, 100.0)
-                result_BFGS = minimize(penalized_objective,result_BFGS_oneiter['x'], method='L-BFGS-B', bounds=[ranges], jac=partial_grad_func_noGamma, options = {'gtol': TR_parameters['sub_tolerance'], 'maxiter': TR_parameters['max_iterations_subproblem']})
+                result_BFGS = minimize(penalized_objective,result_BFGS_oneiter['x'], callback=callback, method='L-BFGS-B', bounds=[ranges], jac=partial_grad_func_noGamma, options = {'gtol': TR_parameters['sub_tolerance'], 'maxiter': TR_parameters['max_iterations_subproblem']})
 
             elif dim == 2: 
                 ranges = (0.5, np.pi)
-                ranges_gamma = (0.05, 30)
-                result_BFGS = minimize(penalized_objective, result_BFGS_oneiter['x'], method='L-BFGS-B', bounds=(ranges, ranges), jac=partial_grad_func_noGamma, options = {'gtol': TR_parameters['sub_tolerance'], 'maxiter': TR_parameters['max_iterations_subproblem']})
+                result_BFGS = minimize(penalized_objective, result_BFGS_oneiter['x'], callback=callback, method='L-BFGS-B', bounds=(ranges, ranges), jac=partial_grad_func_noGamma, options = {'gtol': TR_parameters['sub_tolerance'], 'maxiter': TR_parameters['max_iterations_subproblem']})
 
             elif dim == 12: 
                 ranges_0 = (0.05, 0.2)
                 ranges_1 = (0, 100)
                 ranges_2 = (0.025, 0.1)
-                ranges_gamma = (0.001, 100)
-                result_BFGS = minimize(penalized_objective, result_BFGS_oneiter['x'], method='L-BFGS-B', bounds=(ranges_0, ranges_0, ranges_1, ranges_1, ranges_1, ranges_1, ranges_1, ranges_1, ranges_1, ranges_2, ranges_2, ranges_2), jac=partial_grad_func_noGamma, options = {'gtol': TR_parameters['sub_tolerance'], 'maxiter': TR_parameters['max_iterations_subproblem']})
+                result_BFGS = minimize(penalized_objective, result_BFGS_oneiter['x'], callback=callback, method='L-BFGS-B', bounds=(ranges_0, ranges_0, ranges_1, ranges_1, ranges_1, ranges_1, ranges_1, ranges_1, ranges_1, ranges_2, ranges_2, ranges_2), jac=partial_grad_func_noGamma, options = {'gtol': TR_parameters['sub_tolerance'], 'maxiter': TR_parameters['max_iterations_subproblem']})
             
             else: 
                 raise NotImplementedError
@@ -470,12 +431,9 @@ def tr_Kernel(model, kernel, TR_parameters):
         print("\n *********** starting iteration number {} ***********".format(k))
 
         rhs = np.r_[y_train, grad_y_train.flatten(order='F').reshape(-1,1)]
-        #TODO vllt hier auch einmal alpha ausrechnen, dann spart man sichs für den rest und unten immer?
 
         print("_________ starting the subproblem __________________")
         mu_kp1, J_AGC, J_kp1, gradient_kp1, success = solve_subproblem_scipyBFGS(model, kernel, alpha, X_train, rhs, mu_k, TR_parameters, RKHS_train_values, RKHS_rhs)
-        #mu_kp1, J_AGC, J_kp1, gradient_kp1, success = solve_optimization_subproblem_NewtonMethod(model, alpha, mu_k, TR_parameters, kernel, X_train, rhs, RKHS_train_values, RKHS_rhs)
-        #mu_kp1, J_AGC, J_kp1, gradient_kp1, success = optimization_subproblem_BFGS(model, kernel, alpha, X_train, rhs, mu_k, TR_parameters, RKHS_train_values, RKHS_rhs)
         print("_________ done solving the subproblem ______________")
 
         if not success:
@@ -512,7 +470,7 @@ def tr_Kernel(model, kernel, TR_parameters):
                 grad_y_train = np.append(grad_y_train, np.atleast_2d(grad_J_FOM_kp1).reshape(-1,1), axis=1)
 
                 X_train, y_train, grad_y_train = remove_far_away_points(X_train, y_train, grad_y_train, mu_kp1, TR_parameters)
-                X_train, y_train, grad_y_train = remove_similar_points(X_train, y_train, grad_y_train, kernel, mu_kp1[-1,0])
+                X_train, y_train, grad_y_train = remove_similar_points(X_train, y_train, grad_y_train, kernel, mu_kp1[-1,0], TR_parameters)
                 
             else: 
                 J_FOM_kp1, grad_J_FOM_kp1 = J_kp1, np.atleast_2d(grad_y_train[:,-1]).reshape(-1,1)
@@ -522,11 +480,9 @@ def tr_Kernel(model, kernel, TR_parameters):
                 if dim == 1:
                     kernel = kernels.Gauss(gamma=mu_kp1[-1,0])
                 elif dim == 2: 
-                    #kernel = kernels.InvMulti(gamma=mu_kp1[-1,0])
                     kernel = kernels.QuadMatern(gamma=mu_kp1[-1,0])
                 elif dim == 12: 
                     kernel = kernels.QuadWendland(gamma=mu_kp1[-1,0], d=model.dim)
-                    #kernel = kernels.QuadMatern(gamma=mu_kp1[-1,0])
                 else: 
                     raise NotImplementedError
                  
@@ -569,7 +525,7 @@ def tr_Kernel(model, kernel, TR_parameters):
                 grad_y_train = np.append(grad_y_train, np.atleast_2d(grad_J_FOM_kp1).reshape(-1,1), axis=1)
 
                 X_train, y_train, grad_y_train = remove_far_away_points(X_train, y_train, grad_y_train, mu_kp1, TR_parameters)
-                X_train, y_train, grad_y_train = remove_similar_points(X_train, y_train, grad_y_train, kernel, mu_kp1[-1,0])
+                X_train, y_train, grad_y_train = remove_similar_points(X_train, y_train, grad_y_train, kernel, mu_kp1[-1,0], TR_parameters)
                 
             else: 
                 J_FOM_kp1, grad_J_FOM_kp1 = J_kp1, np.atleast_2d(grad_y_train[:,-1]).reshape(-1,1)
@@ -602,7 +558,7 @@ def tr_Kernel(model, kernel, TR_parameters):
 
                 if y_train.shape[0] >= 2 and abs(y_train[-2, 0] - J_kp1) > np.finfo(float).eps:
                         if (k-1 != 0) and (y_train[-2, 0] - y_train[-1, 0])/(y_train[-2, 0] - J_kp1) >= TR_parameters['rho']:
-                            if TR_parameters['radius'] < 1: #TODO change to max_radius?
+                            if TR_parameters['radius'] < 1:
                                 TR_parameters['radius'] *= 1/(TR_parameters['beta_1'])
                                 print("Enlarging the TR radius to {}".format(TR_parameters['radius']))
                 
