@@ -267,19 +267,19 @@ def solve_subproblem_scipyBFGS(model, kernel, alpha, X_train, rhs, mu_k, TR_para
             if dim == 1: 
                 ranges = (-2, 2.0)
                 ranges_gamma = (0.725, 100.0)
-                result_BFGS_oneiter = minimize(penalized_objective, mu_k[:,0], method='L-BFGS-B', bounds=(ranges, ranges_gamma), jac=partial_gradient, options = {'maxiter': 1, 'disp': False})
+                result_BFGS_oneiter = minimize(penalized_objective, mu_k[:,0], callback=callback, method='L-BFGS-B', bounds=(ranges, ranges_gamma), jac=partial_gradient, options = {'maxiter': 1, 'disp': False})
 
             elif dim == 2: 
                 ranges = (0.5, np.pi)
                 ranges_gamma = (0.05, 30)
-                result_BFGS_oneiter = minimize(penalized_objective, mu_k[:,0], method='L-BFGS-B', bounds=(ranges, ranges, ranges_gamma), jac=partial_gradient, options = {'maxiter': 1, 'disp': False})
+                result_BFGS_oneiter = minimize(penalized_objective, mu_k[:,0], callback=callback, method='L-BFGS-B', bounds=(ranges, ranges, ranges_gamma), jac=partial_gradient, options = {'maxiter': 1, 'disp': False})
 
             elif dim == 12: 
                 ranges_0 = (0.05, 0.2)
                 ranges_1 = (0, 100)
                 ranges_2 = (0.025, 0.1)
                 ranges_gamma = (0.001, 100)
-                result_BFGS_oneiter = minimize(penalized_objective, mu_k[:,0], method='L-BFGS-B', bounds=(ranges_0, ranges_0, ranges_1, ranges_1, ranges_1, ranges_1, ranges_1, ranges_1, ranges_1, ranges_2, ranges_2, ranges_2, ranges_gamma), jac=partial_gradient, options = {'maxiter': 1, 'disp': False})
+                result_BFGS_oneiter = minimize(penalized_objective, mu_k[:,0], callback=callback, method='L-BFGS-B', bounds=(ranges_0, ranges_0, ranges_1, ranges_1, ranges_1, ranges_1, ranges_1, ranges_1, ranges_1, ranges_2, ranges_2, ranges_2, ranges_gamma), jac=partial_gradient, options = {'maxiter': 1, 'disp': False})
 
             else: 
                 raise NotImplementedError
