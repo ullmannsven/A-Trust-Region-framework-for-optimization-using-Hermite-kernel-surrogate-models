@@ -208,252 +208,11 @@ def compute_gradientGamma(mu_k, kernel, X_train, rhs):
     return np.atleast_2d(torch.autograd.grad(targetFunc(gamma), gamma)[0].detach().numpy())
 
 
-def armijo_rule(model, kernel, X_train, rhs, alpha, TR_parameters, mu_i, Ji, direction, gradient, RKHS_train_values, RKHS_rhs):
-   
-    success   = True
-    j         = 0
-    gradient  = np.atleast_2d(gradient).reshape(-1,1)
-
-    #if TR_parameters['gamma_adaptive']:
-    #    cos_phi   = np.dot(direction.T, -gradient) / (np.linalg.norm(direction)*np.linalg.norm(gradient))
-    #else:
-    cos_phi   = np.dot(direction[:-1,:].T, -gradient[:-1,:]) / (np.linalg.norm(direction[:-1,:])*np.linalg.norm(gradient[:-1,:]))
-
-    condition = True
-
-    while condition and j < TR_parameters['max_iterations_armijo']:
-        mu_ip1        = np.zeros((mu_i.shape[0], 1))
-        mu_ip1[:-1,:] = mu_i[:-1,:] + (TR_parameters['initial_step_armijo']**j)*(direction[:-1,:])
-        mu_ip1[-1,:]  = mu_i[-1,:] + (TR_parameters['initial_step_armijo']**j)*(direction[-1,:])
-        mu_ip1        = projection_onto_range(model, mu_ip1)
-
-        if TR_parameters['gamma_adaptive']:
-            alpha = np.linalg.solve(kernel.getGramHermite(X_train[:-1, :], X_train[:-1, :], newGamma=mu_ip1[-1, 0]), rhs)
-
-        Jip1  = kernel.evalFunc(mu_ip1[:-1, :], X_train[:-1, :], alpha, newGamma=mu_ip1[-1,0])
-        
-        if TR_parameters['gamma_adaptive']:
-            power_val   = kernel.powerFunc(mu_ip1[:-1, :], X_train[:-1, :], newGamma=mu_ip1[-1,0]) 
-        else: 
-            power_val   = kernel.powerFunc(mu_ip1[:-1, :], X_train[:-1, :]) 
-            
-
-        if model.RKHS_explicit:
-            if TR_parameters['gamma_adaptive']:
-                estimator_J = power_val * model.compute_RKHS_norm(mu_ip1)
-            else: 
-                estimator_J = power_val * model.compute_RKHS_norm(mu_ip1, kernel)
-        else: 
-            if TR_parameters['gamma_adaptive']:
-                estimator_J = power_val * kernel.getRKHSNorm(RKHS_train_values, RKHS_rhs, newGamma=mu_ip1[-1, 0])
-            else: 
-                estimator_J = power_val * kernel.getRKHSNorm(RKHS_train_values, RKHS_rhs)
-
-        # if TR_parameters['gamma_adaptive']: 
-        #     if Jip1 > 0 and (Jip1 - Ji) <= ((-1)*(TR_parameters['armijo_alpha']*TR_parameters['initial_step_armijo']**j)*np.linalg.norm(gradient)*np.linalg.norm(mu_ip1 - mu_i)*cos_phi) and estimator_J / Jip1 <= TR_parameters['radius']:
-        #         condition = False
-        #         print("Armijo and optimization subproblem constraints satisfied at mu: {} after {} backtracking step(s)".format(mu_ip1[:,0], j+1))
-
-        # else: 
-        if Jip1 > 0 and (Jip1 - Ji) <= ((-1)*(TR_parameters['armijo_alpha']*TR_parameters['initial_step_armijo']**j)*np.linalg.norm(gradient[:-1,:])*np.linalg.norm(mu_ip1[:-1,:] - mu_i[:-1,:])*cos_phi) and estimator_J / Jip1 <= TR_parameters['radius']:
-            condition = False
-            print("Armijo and optimization subproblem constraints satisfied at mu: {} after {} backtracking step(s)".format(mu_ip1[:,0], j+1))
-
-
-        j += 1
-
-    if condition:
-        print("Warning: Maximum iteration for Armijo rule reached, proceeding with latest mu: {}".format(mu_i[:,0]))
-        success = False
-        mu_ip1 = mu_i
-        Jip1 = Ji
-        estimator_J = TR_parameters['radius']*Ji
-
-    boundary_TR_criterium = abs(estimator_J/Jip1)
-    return  mu_ip1, Jip1, boundary_TR_criterium, success, alpha
-
-def compute_new_hessian_approximation(mu_i, mu_old, gradient, gradient_old, B_old):
-    """Computes an approximation of the inverse Hessian at parameter |mu_i|.
-
-    Parameters
-    ----------
-    mu_i
-        The current iterate of the BFGS subproblem.
-    mu_old
-        The previous iterate of the BFGS subproblem.
-    gradient
-        The gradient at parameter |mu_i|.
-    gradient _old
-        The gradient at parameter |old_mu|.
-    B_old
-        An approximation of the inverse Hessian at parameter |mu_old|
-
-    Returns
-    -------
-    B_new
-        An approximation of the Hessian at parameter |mu_i|.
-    """
-    yk  = gradient.T - gradient_old.T
-    yk  = yk[0,:]
-    sk  = mu_i.T - mu_old.T
-    sk  = sk[0,:]
-    den = np.dot(yk, sk)
-
-    if den > 0:
-        Hkyk    = np.dot(B_old,yk)
-        coeff   = np.dot(yk, Hkyk)
-        HkykskT = np.outer(Hkyk, sk)
-        skHkykT = np.outer(sk, Hkyk)
-        skskT   = np.outer(sk, sk)
-        B_new   = B_old + ((den + coeff)/(den*den) * skskT)  - (HkykskT/den) - (skHkykT/den)
-    else:
-        B_new = np.eye(gradient_old.size)
-
-    return B_new
-
-def compute_modified_hessian_action_matrix_version(B, Active, Inactive, eta):
-
-    etaA                 = np.multiply(Active[:, np.newaxis], eta)
-    etaI                 = np.multiply(Inactive[:, np.newaxis], eta)
-    Hessian_inv_prod     = B @ etaI
-    Action_of_modified_H = etaA + np.multiply(Inactive[:, np.newaxis], Hessian_inv_prod)
-
-    return Action_of_modified_H
-
-def optimization_subproblem_BFGS(model, kernel, alpha, X_train, rhs, mu_i, TR_parameters, RKHS_train_values, RKHS_rhs):
-    """Solves the optimization subproblem of the TR algorithm using a BFGS with constraints.
-
-    Parameters
-    ----------
-    paramter_space
-        The |parameter_space| of the full order model which is optimized.
-    kernel_model
-        The kernel model which is used to approximate the objective function.
-    kernel
-        The kernel model which is used to approximate the objective function.
-    X_train
-        The interpolation training set at the current iteration.
-    y_train
-        The target values corresponding to the interpolation training set |X_train|.
-    mu_i
-        The current iterate of the TR algorithm.
-    TR_parameters
-        The list |TR_parameters| which contains all the parameters of the TR algorithm.
-    RKHS_norm
-        The approximation of the |RKHS_norm| of the objective function.
-
-    Returns
-    -------
-    mu_ip1
-        The new iterate for the kernel TR algorithm.
-    J_AGC
-        The value of the functional which gets optimized at the AGC point, which is the first iterate of the BFGS algorithm.
-    i
-        The number of iterations the subproblem needed to terminate.
-    Jip1
-        The value of the |kernel_model| at the paramter |mu_ip1|.
-    success
-        Boolean if the Armijo line search was successful or terminated because of the maximum amount of iteration j_{max}.
-    """
-    print('\n______ starting BFGS subproblem _______')
-
-    Ji               = kernel.evalFunc(mu_i[:-1, :], X_train[:-1,:], alpha)
-    gradientNonGamma = kernel.evalGrad(mu_i[:-1,:], X_train[:-1,:], alpha)
-    gradientGamma    = compute_gradientGamma(mu_i, kernel, X_train, rhs) 
-
-    h = 0.0001 
-    alpha_plus = np.linalg.solve(kernel.getGramHermite(X_train[:-1, :], X_train[:-1, :], newGamma=(kernel.gamma + h)), rhs)
-    alpha_minus = np.linalg.solve(kernel.getGramHermite(X_train[:-1, :], X_train[:-1, :], newGamma=(kernel.gamma - h)), rhs)
-    test_plus = kernel.evalFunc(mu_i[:-1, :], X_train[:-1,:], alpha_plus, newGamma=(kernel.gamma + h))
-    test_minus = kernel.evalFunc(mu_i[:-1, :], X_train[:-1,:], alpha_minus, newGamma=(kernel.gamma - h))
-    print("Achrung achtung", gradientGamma, (test_plus - test_minus)/(2*h))
-
-    gradient         = np.concatenate((gradientNonGamma, gradientGamma), axis=0)
-
-    if TR_parameters['gamma_adaptive']: 
-        B = np.eye(model.dim + 1)
-    else: 
-        B = np.eye(model.dim)
-
-    Active_i, Inactive_i = active_and_inactive_sets(model, mu_i[:-1,:], 1e-8)
-
-    if TR_parameters['gamma_adaptive']: 
-        Active_i   = np.append(Active_i, 0)
-        Inactive_i = np.ones(Active_i.shape) - Active_i
-
-    print("The gradient at point {} is {}".format(mu_i[:,0], gradient[:,0]))
-
-    i = 1
-    while i <= TR_parameters['max_iterations_subproblem']:
-        if i>1:
-            if boundary_TR_criterium >= TR_parameters['beta_2']*TR_parameters['radius']:
-                print('Boundary condition of TR satisfied, stopping the subproblem solver now and using mu = {} as next iterate'.format(mu_ip1[0,:]))
-                break
-            elif normgrad < TR_parameters['sub_tolerance'] or J_diff < TR_parameters['J_tolerance']:
-                print('Subproblem converged at mu = {}, with FOC = {}, mu_diff = {}, J_diff = {}'.format(mu_ip1[:,0], normgrad, mu_diff, J_diff))
-                break
-            else:
-                print('Subproblem not converged (mu = {}, FOC = {}, mu_diff = {}, J_diff = {}), continuing with next armijo line search'.format(mu_ip1[:,0], normgrad, mu_diff, J_diff))
-
-        direction         = np.zeros((model.dim + 1, 1)) 
-        #direction[:-1, :] = - B @ gradient[:-1, :]
-        #direction[-1, 0]  = 0
-
-        if Inactive_i.sum() == 0.0:
-            if TR_parameters['gamma_adaptive']:
-                direction = - gradient
-            else:
-                direction[:-1,:] = - gradient[:-1,:]
-        else:
-           if TR_parameters['gamma_adaptive']:
-               direction = compute_modified_hessian_action_matrix_version(B, Active_i, Inactive_i, -gradient)
-           else: 
-               direction[:-1,:] = compute_modified_hessian_action_matrix_version(B, Active_i, Inactive_i, -gradient[:-1,:])
-            
-        mu_ip1, Jip1, boundary_TR_criterium, success, alpha = armijo_rule(model, kernel, X_train, rhs, alpha, TR_parameters, mu_i, Ji, direction, gradient, RKHS_train_values, RKHS_rhs)
-       
-        if i == 1:
-            J_AGC = Jip1
-
-        mu_diff      = np.linalg.norm(mu_i[:-1,:] - mu_ip1[:-1,:]) / (np.linalg.norm(mu_i[:-1,:]))
-        J_diff       = abs(Ji - Jip1) / np.max([abs(Jip1,), abs(Ji), 1])
-        old_mu       = mu_i.copy()
-        mu_i         = mu_ip1
-        Ji           = Jip1
-        old_gradient = gradient.copy()
-
-        gradientNonGamma = kernel.evalGrad(mu_i[:-1,:], X_train[:-1,:], alpha)
-        gradientGamma    = compute_gradientGamma(mu_i, kernel, X_train, rhs)
-        h = 0.0001 
-        alpha_plus = np.linalg.solve(kernel.getGramHermite(X_train[:-1, :], X_train[:-1, :], newGamma=(kernel.gamma + h)), rhs)
-        alpha_minus = np.linalg.solve(kernel.getGramHermite(X_train[:-1, :], X_train[:-1, :], newGamma=(kernel.gamma - h)), rhs)
-        test_plus = kernel.evalFunc(mu_i[:-1, :], X_train[:-1,:], alpha_plus, newGamma=(kernel.gamma + h))
-        test_minus = kernel.evalFunc(mu_i[:-1, :], X_train[:-1,:], alpha_minus, newGamma=(kernel.gamma - h))
-        print("Achrung achtung", gradientGamma, (test_plus - test_minus)/(2*h))
-        gradient         = np.concatenate((gradientNonGamma, gradientGamma), axis=0)
-        mu_box           = mu_i[:-1,:] - gradient[:-1,:]
-        normgrad         = np.linalg.norm(mu_i[:-1,:] - projection_onto_range(model, mu_box), ord=np.inf)
-
-
-        Active_i, Inactive_i = active_and_inactive_sets(model, mu_i[:-1, :], 1e-8)
-
-        if TR_parameters['gamma_adaptive']:
-            Active_i   = np.append(Active_i, 0)
-            Inactive_i = np.ones(Active_i.shape) - Active_i
-            B          = compute_new_hessian_approximation(mu_i, old_mu, gradient, old_gradient, B)
-        else:
-            B = compute_new_hessian_approximation(mu_i[:-1,:], old_mu[:-1,:], gradient[:-1,:], old_gradient[:-1,:], B)
-
-        i += 1
-
-    print('______ ending BFGS subproblem _______\n')
-
-    return mu_ip1, J_AGC, Jip1, gradient, success
-
 
 def solve_subproblem_scipyBFGS(model, kernel, alpha, X_train, rhs, mu_k, TR_parameters, RKHS_train_values, RKHS_rhs):
 
     current_rad = TR_parameters['radius']
+    dim = model.dim 
 
     def partial_grad_func_noGamma(mu, alpha=alpha, X_train=X_train): 
         if TR_parameters['gamma_adaptive']:
@@ -535,45 +294,105 @@ def solve_subproblem_scipyBFGS(model, kernel, alpha, X_train, rhs, mu_k, TR_para
             else:
                 return kernel.evalFunc(x, X_train[:-1,:], alpha) + penalty_factor*np.abs(min(0,  (rad * np.abs(kernel.evalFunc(x, X_train[:-1,:], alpha)) - (kernel.powerFuncSingle(x, X_train[:-1, :]) * kernel.getRKHSNorm(RKHS_train_values, RKHS_rhs)))))
 
-    #1D
-    #ranges = (-2, 2.0)
-    #ranges_gamma = (0.725, 100.0)
-
-    #2D
-    ranges = (0.5, np.pi)
-    ranges_gamma = (0.05, 30)
-    #(ranges, ranges, ranges_gamma)
-
-    #12D
-    #ranges_0 = (0.05, 0.2)
-    #ranges_1 = (0, 100)
-    #ranges_2 = (0.025, 0.1)
-    #ranges_gamma = (0.001, 100) #for kernel width
-
-    #ranges_0, ranges_0, ranges_1, ranges_1, ranges_1, ranges_1, ranges_1, ranges_1, ranges_1, ranges_2, ranges_2, ranges_2, ranges_gamma
-
+    
     if TR_parameters['gamma_adaptive']: 
         try:
-            result_BFGS_oneiter = minimize(penalized_objective, mu_k[:,0], method='L-BFGS-B', bounds=(ranges, ranges, ranges_gamma), jac=partial_gradient, options = {'maxiter': 1, 'disp': False})
+            if dim == 1: 
+                ranges = (-2, 2.0)
+                ranges_gamma = (0.725, 100.0)
+                result_BFGS_oneiter = minimize(penalized_objective, mu_k[:,0], method='L-BFGS-B', bounds=(ranges, ranges_gamma), jac=partial_gradient, options = {'maxiter': 1, 'disp': False})
+
+            elif dim == 2: 
+                ranges = (0.5, np.pi)
+                ranges_gamma = (0.05, 30)
+                result_BFGS_oneiter = minimize(penalized_objective, mu_k[:,0], method='L-BFGS-B', bounds=(ranges, ranges, ranges_gamma), jac=partial_gradient, options = {'maxiter': 1, 'disp': False})
+
+            elif dim == 12: 
+                ranges_0 = (0.05, 0.2)
+                ranges_1 = (0, 100)
+                ranges_2 = (0.025, 0.1)
+                ranges_gamma = (0.001, 100)
+                result_BFGS_oneiter = minimize(penalized_objective, mu_k[:,0], method='L-BFGS-B', bounds=(ranges_0, ranges_0, ranges_1, ranges_1, ranges_1, ranges_1, ranges_1, ranges_1, ranges_1, ranges_2, ranges_2, ranges_2, ranges_gamma), jac=partial_gradient, options = {'maxiter': 1, 'disp': False})
+
+            else: 
+                raise NotImplementedError
+            
         except TerminationException as e:
             print("Find Cauchy point: ", e)
             result_BFGS_oneiter = last_iteration_data
 
         try:
-            result_BFGS = minimize(penalized_objective, result_BFGS_oneiter['x'], callback=callback, method='L-BFGS-B', bounds=(ranges, ranges, ranges_gamma), jac=partial_gradient, options = {'gtol': TR_parameters['sub_tolerance'], 'maxiter': TR_parameters['max_iterations_subproblem']})
+            if dim == 1: 
+                ranges = (-2, 2.0)
+                ranges_gamma = (0.725, 100.0)
+                result_BFGS = minimize(penalized_objective,result_BFGS_oneiter['x'], method='L-BFGS-B', bounds=(ranges, ranges_gamma), jac=partial_gradient, options = {'gtol': TR_parameters['sub_tolerance'], 'maxiter': TR_parameters['max_iterations_subproblem']})
+
+            elif dim == 2: 
+                ranges = (0.5, np.pi)
+                ranges_gamma = (0.05, 30)
+                result_BFGS = minimize(penalized_objective, result_BFGS_oneiter['x'], method='L-BFGS-B', bounds=(ranges, ranges, ranges_gamma), jac=partial_gradient, options = {'gtol': TR_parameters['sub_tolerance'], 'maxiter': TR_parameters['max_iterations_subproblem']})
+
+            elif dim == 12: 
+                ranges_0 = (0.05, 0.2)
+                ranges_1 = (0, 100)
+                ranges_2 = (0.025, 0.1)
+                ranges_gamma = (0.001, 100)
+                result_BFGS = minimize(penalized_objective, result_BFGS_oneiter['x'], method='L-BFGS-B', bounds=(ranges_0, ranges_0, ranges_1, ranges_1, ranges_1, ranges_1, ranges_1, ranges_1, ranges_1, ranges_2, ranges_2, ranges_2, ranges_gamma), jac=partial_gradient, options = {'gtol': TR_parameters['sub_tolerance'], 'maxiter': TR_parameters['max_iterations_subproblem']})
+            
+            else: 
+                raise NotImplementedError
+
         except TerminationException as e:
             print("L-BFGS-B minimizer: ", e)
             result_BFGS = last_iteration_data
 
     else: 
         try:
-            result_BFGS_oneiter = minimize(penalized_objective, mu_k[:-1,0], method='L-BFGS-B', bounds=(ranges, ranges), jac=partial_grad_func_noGamma, options = {'maxiter': 1, 'disp': False})
+            if dim == 1: 
+                ranges = (-2, 2.0)
+                ranges_gamma = (0.725, 100.0)
+                result_BFGS_oneiter = minimize(penalized_objective, mu_k[:,0], method='L-BFGS-B', bounds=[ranges], jac=partial_grad_func_noGamma, options = {'maxiter': 1, 'disp': False})
+
+            elif dim == 2: 
+                ranges = (0.5, np.pi)
+                ranges_gamma = (0.05, 30)
+                result_BFGS_oneiter = minimize(penalized_objective, mu_k[:,0], method='L-BFGS-B', bounds=(ranges, ranges), jac=partial_grad_func_noGamma, options = {'maxiter': 1, 'disp': False})
+
+            elif dim == 12: 
+                ranges_0 = (0.05, 0.2)
+                ranges_1 = (0, 100)
+                ranges_2 = (0.025, 0.1)
+                ranges_gamma = (0.001, 100)
+                result_BFGS_oneiter = minimize(penalized_objective, mu_k[:,0], method='L-BFGS-B', bounds=(ranges_0, ranges_0, ranges_1, ranges_1, ranges_1, ranges_1, ranges_1, ranges_1, ranges_1, ranges_2, ranges_2, ranges_2), jac=partial_grad_func_noGamma, options = {'maxiter': 1, 'disp': False})
+
+            else: 
+                raise NotImplementedError
+            
         except TerminationException as e:
             print("Find Cauchy point: ", e)
             result_BFGS_oneiter = last_iteration_data
 
         try:
-            result_BFGS = minimize(penalized_objective, result_BFGS_oneiter['x'], callback=callback, method='L-BFGS-B', bounds=(ranges, ranges), jac=partial_grad_func_noGamma, options = {'gtol': TR_parameters['sub_tolerance'], 'maxiter': TR_parameters['max_iterations_subproblem']})
+            if dim == 1: 
+                ranges = (-2, 2.0)
+                ranges_gamma = (0.725, 100.0)
+                result_BFGS = minimize(penalized_objective,result_BFGS_oneiter['x'], method='L-BFGS-B', bounds=[ranges], jac=partial_grad_func_noGamma, options = {'gtol': TR_parameters['sub_tolerance'], 'maxiter': TR_parameters['max_iterations_subproblem']})
+
+            elif dim == 2: 
+                ranges = (0.5, np.pi)
+                ranges_gamma = (0.05, 30)
+                result_BFGS = minimize(penalized_objective, result_BFGS_oneiter['x'], method='L-BFGS-B', bounds=(ranges, ranges), jac=partial_grad_func_noGamma, options = {'gtol': TR_parameters['sub_tolerance'], 'maxiter': TR_parameters['max_iterations_subproblem']})
+
+            elif dim == 12: 
+                ranges_0 = (0.05, 0.2)
+                ranges_1 = (0, 100)
+                ranges_2 = (0.025, 0.1)
+                ranges_gamma = (0.001, 100)
+                result_BFGS = minimize(penalized_objective, result_BFGS_oneiter['x'], method='L-BFGS-B', bounds=(ranges_0, ranges_0, ranges_1, ranges_1, ranges_1, ranges_1, ranges_1, ranges_1, ranges_1, ranges_2, ranges_2, ranges_2), jac=partial_grad_func_noGamma, options = {'gtol': TR_parameters['sub_tolerance'], 'maxiter': TR_parameters['max_iterations_subproblem']})
+            
+            else: 
+                raise NotImplementedError
+            
         except TerminationException as e:
             print("L-BFGS-B minimizer: ", e)
             result_BFGS = last_iteration_data
@@ -591,156 +410,6 @@ def solve_subproblem_scipyBFGS(model, kernel, alpha, X_train, rhs, mu_k, TR_para
     success  = result_BFGS['success']
     
     return mu_kp1, J_AGC, J_kp1, gradient, success
-
-
-def estimate_hessian(mu_k, kernel, alpha, X_train, step_size=1e-4):
-    dim     = mu_k.shape[0] - 1
-    hessian = np.zeros((dim, dim))
-
-    for j in range(dim):
-        e_j            = np.zeros(dim+1).reshape(-1,1)
-        e_j[j, 0]      = step_size
-        grad_plus      = kernel.evalGrad((mu_k + e_j)[:-1, :],  X_train[:-1, :], alpha)
-        grad_minus     = kernel.evalGrad((mu_k - e_j)[:-1, :],  X_train[:-1, :], alpha)
-        hessian[j,:]   = (grad_plus[:,0] - grad_minus[:,0]) / (2*step_size)
-
-    return hessian
-
-def modified_hessian_action(Active,Inactive, Hessian_approximation, eta):
-
-    etaA                        = np.multiply(Active[:, np.newaxis], eta)
-    etaI                        = np.multiply(Inactive[:, np.newaxis], eta)
-    Action_of_modified_operator = etaA + np.multiply(Inactive[:, np.newaxis], Hessian_approximation @ etaI)
-
-    return Action_of_modified_operator
-
-
-def truncated_conj_grad(A_func, b, x_0=None, tol=10e-6, maxiter = None, atol = None):
-    
-    if x_0 is None:
-        x_0 = np.zeros(b.shape[0]).reshape(-1,1)
-    if atol is None:
-        atol = tol
-    if maxiter is None:
-        maxiter = 10*b.size
-    
-    test = A_func(x_0)
-    if len(test) == len(b):
-        def action(x):
-                return A_func(x)
-    else:
-        print(x_0.shape, test.shape, b.shape)
-        print('wrong input for A in the CG method')
-        return
-    
-    r_k   = b-test
-    p_k   = r_k
-    count = 0
-    x_k   = x_0
-
-    #cause we need the norm more often than one time, we save it
-    tmp_r_k_norm = np.linalg.norm(r_k)
-    norm_b       = np.linalg.norm(b)
-    while count < maxiter and tmp_r_k_norm > max(tol*norm_b,atol):
-    
-        tmp     = action(p_k)
-        p_kxtmp = np.dot(p_k.T,tmp)
-
-        #check if p_k is a descent direction, otherwise terminate
-        if p_kxtmp<= 1e-10*(np.linalg.norm(p_k))**2:
-            print("CG truncated at iteration: {} with residual: {}, because p_k is not a descent direction".format(count,tmp_r_k_norm))
-            if count>0:
-                return x_k, 0
-            else:
-                return x_k, 1
-        else:
-            alpha_k      = ((tmp_r_k_norm)**2)/(p_kxtmp)
-            x_k          = x_k + alpha_k*p_k
-            r_k          = r_k - alpha_k*tmp
-            tmp_r_k1     = np.linalg.norm(r_k)
-            beta_k       = (tmp_r_k1)**2/(tmp_r_k_norm)**2
-            tmp_r_k_norm = tmp_r_k1
-            p_k          = r_k + beta_k*p_k
-            count       += 1
-    
-    if count >= maxiter:
-        print("Maximum number of iteration for CG reached, residual= {}".format(tmp_r_k_norm))
-        return x_k, 1
-    
-    return x_k, 0
-
-
-def solve_optimization_subproblem_NewtonMethod(model, alpha, mu_k, TR_parameters, kernel, X_train, rhs, RKHS_train_values, RKHS_rhs):
-    print('___ starting subproblem _____')
-
-    mu_diff = 1
-    J_diff  = 1
-    Ji      = kernel.evalFunc(mu_k[:-1,:], X_train[:-1,:], alpha)
-    mu_i    = mu_k.copy()
-
-    gradientNonGamma = kernel.evalGrad(mu_k[:-1,:], X_train[:-1,:], alpha)
-    gradientGamma    = compute_gradientGamma(mu_k, kernel, X_train, rhs) 
-    gradient         = np.concatenate((gradientNonGamma, gradientGamma), axis=0)
-
-    mu_box                = mu_k[:-1,:] - gradient[:-1,:]
-    first_order_criticity = mu_k[:-1,:] - projection_onto_range(model, mu_box)
-    normgrad              = np.linalg.norm(first_order_criticity, ord=np.inf)
-
-    i = 0
-    while i < TR_parameters['max_iterations_subproblem']:
-        if i>0:
-            if boundary_TR_criterium >= TR_parameters['beta_2']*TR_parameters['radius']:
-                print("Boundary criterium of the TR satisfied, so stopping the sub-problem")
-                return mu_ip1, J_AGC, Jip1, gradient, success
-
-            if normgrad < TR_parameters['sub_tolerance'] or J_diff < TR_parameters['J_tolerance'] or mu_diff < TR_parameters['J_tolerance']:
-                print("Subproblem converged: mu_diff = {}, J_diff = {}, FOC = {}".format(mu_diff,J_diff,normgrad))
-                break
-
-        if i == 0:
-            print("Computing the approximate Cauchy point and then start the Newton method")
-            direction = - gradient
-
-        else:
-            Active_i, Inactive_i      = active_and_inactive_sets(model, mu_i[:-1,:], 1e-8)
-            direction                 = np.zeros((model.dim + 1, 1)) 
-
-            if Inactive_i.sum() == 0: 
-                direction[:-1,:] = - gradient
-            else:
-                hessian_estimate          = estimate_hessian(mu_k, kernel, alpha, X_train, step_size=1e-5)
-                #direction[:-1, :], infocg = truncated_conj_grad(A_func=lambda v: modified_hessian_action(Active=Active_i, Inactive=Inactive_i, Hessian_approximation=hessian_estimate, eta=v), b=gradient[:-1,:], tol=1e-10)
-            
-                direction[:-1,0], infocg = sp.sparse.linalg.cg(A=hessian_estimate, b=gradient[:-1,:].reshape(-1,1))
-                direction         = - direction.reshape(-1,1)
-
-                if infocg > 0:
-                    print("CG failed .. Choosing the gradient as direction")
-                    direction = - gradient
-            
-            if np.dot(gradient.T, direction) > -1e-14: 
-                print("Not a descent direction ... taking gradient as direction")
-                direction = - gradient
-
-        mu_ip1, Jip1, boundary_TR_criterium, success = armijo_rule(model, kernel, X_train, alpha, TR_parameters, mu_i, Ji, direction, gradient, RKHS_train_values, RKHS_rhs)
-
-        if i == 0:
-            J_AGC = Jip1
-
-        mu_diff = np.linalg.norm(mu_i - mu_ip1) / np.linalg.norm(mu_i)
-        J_diff = abs(Ji - Jip1) / abs(Ji)
-        mu_i = mu_ip1
-        Ji = Jip1
-
-        gradientNonGamma = kernel.evalGrad(mu_k[:-1,:], X_train[:-1,:], alpha)
-        gradientGamma    = compute_gradientGamma(mu_k, kernel, X_train, rhs)
-        gradient         = np.concatenate((gradientNonGamma, gradientGamma), axis=0)
-        mu_box           = mu_i[:-1,:] - gradient[:-1,:]
-        normgrad         = np.linalg.norm(mu_i[:-1,:] - projection_onto_range(model, mu_box), ord=np.inf)
-
-        i = i + 1
-
-    return mu_ip1, J_AGC, Jip1, gradient, success
 
 
 def tr_Kernel(model, kernel, TR_parameters):
