@@ -7,7 +7,7 @@ import functions.model as models
 import functions.results_analysis as result_analysis
 
 
-gamma_list = [0.1, ] #0.2, 0.3, 0.4, 0.5, 0.6
+gamma_list = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6]
 amount_of_iters = 5
 model  = models.twoDStuff()
 
