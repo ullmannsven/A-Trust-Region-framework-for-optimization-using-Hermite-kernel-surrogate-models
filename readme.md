@@ -11,4 +11,4 @@ In "\functions" the following files are stored:
 
 In "\pyMORAuxData" stores files to setup the 2D and 12D problem, which are based on pyMOR (https://github.com/pymor/pymor). Note that the file for the 12D example are part of the project https://github.com/TiKeil/Proj-Newton-NCD-corrected-TR-RB-for-pde-opt (and therefore contain more code than required for our experiments)
 
-The files run_*_hktr.py reproduce Table 1, Table 3 and Table 5 in the paper. The files run_*_bfgs.py and run_*_trust_constr.py reproduce the rows for L-BFGS-B and trust-constr in Table 2, Table 4 and Table 6. 
+The files run_xxx_hktr.py reproduce Table 1, Table 3 and Table 5 in the paper. The files run_xxx_bfgs.py and run_xxx_trust_constr.py reproduce the rows for L-BFGS-B and trust-constr in Table 2, Table 4 and Table 6. 
