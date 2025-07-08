@@ -28,14 +28,10 @@ class Gaussian1D(Model):
 
     def getFuncAndGradient(self, mu):
         mu = np.atleast_2d(mu)
-        #value =  - np.exp(-mu[0,0]**2) - np.exp( - (mu[0,0] - 1)**2) + 2
-        #der = 2*mu[0,0]* np.exp(-mu[0,0]**2) + (2*(mu[0,0] - 1)) * np.exp( - (mu[0,0] - 1)**2)
-
+        
         value = (-1) * np.exp(-mu[0,0]**2) + 3 * np.exp(-0.001 * mu[0,0]**2)
         der   =  2*mu[0,0]* np.exp(-mu[0,0]**2) - ((3 * mu[0,0] * np.exp(- 0.001 * mu[0,0]**2)) / 500)
         
-        
-
         self.fomCounter += 1
         return value, np.atleast_2d(der).reshape(1,)
 
@@ -54,7 +50,6 @@ class Gaussian1D(Model):
 
             return enum / denom
 
-            #return np.sqrt((2 * kernel_width**2 * ( 1 + np.exp(- (kernel_width**2) / (2 * kernel_width**2 - 1)))) / (np.sqrt(2 * kernel_width**2 - 1)))
         else:
             print("Warning: kernel width below limit, choosing lowest as possible")
             kernel_width = 1/np.sqrt(2) + 1e-8
@@ -63,7 +58,6 @@ class Gaussian1D(Model):
             denom = np.sqrt(np.sqrt(2*kernel_width**2 - 1) * np.sqrt(1001*kernel_width**2 - 1) * np.sqrt(2000*kernel_width**2 - 1) )
 
             return enum / denom
-            #return np.sqrt((2 * kernel_width**2 * ( 1 + np.exp(- (kernel_width**2) / (2 * kernel_width**2 - 1)))) / (np.sqrt(2 * kernel_width**2 - 1)))
 
 class twoDStuff(Model): 
     def __init__(self):
