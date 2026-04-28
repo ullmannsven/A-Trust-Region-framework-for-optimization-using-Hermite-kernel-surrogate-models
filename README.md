@@ -48,23 +48,23 @@ Five radial kernels are implemented; each provides the value `φ(r)`, the rescal
 | `InvMulti` | Inverse multiquadric | available |
 | `LinMatern` | Linear Matern | available |
 
-The Hermite Gram matrix is a block matrix which makes the surrogate interpolate both `J` and `∇J` at every training point. Implementation is based on **VKOGA** (https://github.com/GabrieleSantin/VKOGA), with the Hermite extension specific to this work, following T. Ehrings work on Hermite kernel surrogates https://link.springer.com/article/10.1007/s10444-024-10128-5. 
+The Hermite Gram matrix is a block matrix which makes the surrogate interpolate both `J` and `∇J` at every training point. Implementation is based on **VKOGA** (https://github.com/GabrieleSantin/VKOGA), with the Hermite extension specific to this work, following [Ehring et al.]{https://link.springer.com/article/10.1007/s10444-024-10128-5}. 
 
 ## The HKTR algorithm (`functions/HKTR/kernel_width_hermite_TR.py`)
 
 The main entry point is `tr_Kernel(model, kernel, TR_parameters)`. One outer iteration does the following:
 
 1. Build the Hermite kernel surrogate $J^{(i)}$ by interpolating $(J, \nabla J)$ at the current set of training points.
-2. **Subproblem (`solve_subproblem_scipyBFGS`):** minimize `s_k` using SciPy's L-BFGS-B with a custom callback that terminates as soon as the iterate reaches the trust-region boundary (measured via the kernel power function × RKHS norm vs. `β₂ · radius`), and a penalty term enforcing the trust-region constraint inside the subproblem objective.
-3. Use the kernel a-posteriori estimator `‖J - s_k‖ ≤ P_X(μ) · ‖J‖_RKHS` to decide whether to **accept** the candidate, **reject** it (and shrink the radius by `β₁`), or accept conditionally after a FOM check.
+2. Solve the subproblem (`solve_subproblem_scipyBFGS`): minimize the Hermite kernel surrogate using SciPy's L-BFGS-B with a custom callback that terminates as soon as the iterate reaches the trust-region boundary.
+3. Use the kernel a-posteriori estimator $ \Vert J - J^{(i)} \Vert ≤ P_X(\mu) \Vert J \Vert_{\mathcal{H}_k(\mathcal{P})}$ to decide whether to **accept** the candidate, **reject** it (and shrink the radius by $\beta_1$), or accept conditionally after a FOM check.
 4. Update the training set: append the new point, remove points farther than `max_amount_interpolation_points` from the iterate (`remove_far_away_points`), and remove near-duplicates that would push the Gram matrix above `cond_threshold` (`remove_similar_points`).
-5. Optionally enlarge the radius (factor `1/β₁`) when the actual-vs-predicted reduction ratio exceeds `ρ`.
+5. Optionally enlarge the radius (factor $\frac{1}{\beta_1}$) when the actual-vs-predicted reduction ratio exceeds $\rho$.
 
-If `gamma_adaptive=True`, the kernel width γ is appended as an extra coordinate to the parameter, and its gradient is computed via PyTorch autograd (`compute_gradientGamma`). In the experiments shipped here `gamma_adaptive=False` is used and γ is swept manually via `gamma_list`.
+If `gamma_adaptive=True`, the kernel width $\varepsilon$ is appended as an extra coordinate to the parameter, and its gradient is computed via PyTorch autograd (`compute_gradientGamma`). In the experiments shipped here `gamma_adaptive=False` is used and $\varepsilon$ is swept manually via `gamma_list`.
 
 The RKHS norm needed for the error estimator is either supplied analytically by the model (`compute_RKHS_norm`, available only for `Gaussian1D`) or estimated from 10 random samples (`computeDataForRKHSNorm`).
 
-### Key TR parameters (passed via the `TR_parameters` dict)
+###  Hermite kernel TR parameters (passed via the `TR_parameters` dict)
 
 | Parameter | Meaning |
 |---|---|
@@ -84,8 +84,8 @@ The RKHS norm needed for the error estimator is either supplied analytically by 
 |---|---|---|---|
 | `Gaussian1D` | 1 | Closed-form, two Gaussians | analytic; analytic RKHS norm available |
 | `twoDStuff` | 2 | 2D linear elliptic PDE-constrained problem | pyMOR, `discretize_stationary_cg` |
-| `buildingFloor` | 12 | Stationary heat distribution on a building floor with parametric walls / doors / heaters | pyMOR + bitmap geometry from `pyMORAuxData/EXC_data/`; reused from [Keil et al.](https://github.com/TiKeil/Proj-Newton-NCD-corrected-TR-RB-for-pde-opt) |
-| `NonlinearModel` | 9 | Semilinear PDE parameter identification: recover the 9 weights of a Gaussian basis for `σ` in `-Δu + σ(w) u³ = f` from a reference state | FEniCSx (`dolfinx`), Newton via PETSc SNES, adjoint-based gradient |
+| `buildingFloor` | 12 | Stationary heat distribution on a building floor with parametric walls / doors / heaters | pyMOR + bitmap geometry from `functions/models/pyMORAuxData/EXC_data/`; reused from [Keil et al.](https://github.com/TiKeil/Proj-Newton-NCD-corrected-TR-RB-for-pde-opt) |
+| `NonlinearModel` | 9 | Semilinear PDE parameter identification: recover the 9 weights of a Gaussian basis for `σ` in `-Δu + σ(w) u³ = f` from a reference state | FEniCSx (`dolfinx`) |
 
 All models expose the same `getFuncAndGradient(μ)` interface returning `(J(μ), ∇J(μ))` and a counter `fomCounter` that is incremented on every full-order solve — this is the metric the experiments report.
 
