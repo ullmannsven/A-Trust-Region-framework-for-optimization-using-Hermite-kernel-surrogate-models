@@ -9,7 +9,7 @@ This repository contains the Python code that reproduces all numerical experimen
 
 ## What the method does
 
-For a parameter-to-output map $J : \mu \to J(\mu)$ whose evaluation involves solving a PDE, classical optimizers call the FOM and its adjoint (to obtain the gradient) many times. HKTR replaces these calls with a *Hermite kernel surrogate* that interpolates both function values and gradients of $J$ at a small set of training parameters, and embeds the surrogate in a trust-region loop with a rigorous a-posteriori error estimator based on the kernel power function and the RKHS norm. The surrogate is updated on the fly: new FOM evaluations are added when needed, and points are removed when the Gram matrix becomes ill-conditioned or when they fall outside the current trust region. The numerical examples in the paper (and in this repo) show that this leads to reductions in the number of FOM evaluations needed to reach a given optimization tolerance.
+For a parameter-to-output map $J : \mu \to J(\mu)$ whose evaluation involves solving a PDE, classical optimizers call the FOM and its adjoint (to obtain the gradient) many times. HKTR replaces these calls with a *Hermite kernel surrogate* that interpolates both function values and gradients of $J$ at a small set of training parameters, and embeds the surrogate in a trust-region loop with a rigorous a-posteriori error estimator based on the kernel power function and the RKHS norm. The surrogate is updated on the fly: new FOM evaluations are added when needed, and points are removed when the Gram matrix becomes ill-conditioned or when they fall outside the current trust region. The numerical examples in the paper show that this leads to reductions in the number of FOM evaluations needed to reach a given optimization tolerance.
 
 
 ## The kernels (`functions/HKTR/kernel.py`)
@@ -20,7 +20,7 @@ Five radial kernels are implemented; each provides the value $\varphi(r)$, the r
 |---|---|---|
 | `Gauss` | $\exp(- \varepsilon r^2)$ | 1D example |
 | `QuadMatern` | $\exp(- \varepsilon r) (3 + 3\varepsilon r + (\varepsilon r)^2)$ | 2D example |
-| `QuadWendland` | Wendland-type compactly supported kernel | 12D and 9D nonlinear example |
+| `QuadWendland` | Wendland-type compactly supported kernel | 9D and 12D example |
 | `InvMulti` | Inverse multiquadric | available |
 | `LinMatern` | Linear Matern | available |
 
@@ -68,9 +68,9 @@ The RKHS norm needed for the error estimator is either supplied analytically by 
 | `Gaussian1D` | 1 | Closed-form, two Gaussians | analytic; analytic RKHS norm available |
 | `twoDStuff` | 2 | 2D linear elliptic PDE-constrained problem | pyMOR, `discretize_stationary_cg` |
 | `buildingFloor` | 12 | Stationary heat distribution on a building floor with parametric walls / doors / heaters | pyMOR + bitmap geometry from `functions/models/pyMORAuxData/EXC_data/`; reused from [Keil et al.](https://github.com/TiKeil/Proj-Newton-NCD-corrected-TR-RB-for-pde-opt) |
-| `NonlinearModel` | 9 | Semilinear PDE parameter identification: recover the 9 weights of a Gaussian basis for `σ` in `-Δu + σ(w) u³ = f` from a reference state | FEniCSx (`dolfinx`) |
+| `NonlinearModel` | 9 | Semilinear PDE parameter identification: recover the 9 weights ($\mu$) of a Gaussian basis for $\sigma$ in $-\Delta u(x;\mu) + \sigma(x;\mu) u(x;\mu)^3 = f(x)$ from a reference state | FEniCSx (`dolfinx`) |
 
-All models expose the same `getFuncAndGradient(μ)` interface returning `(J(μ), ∇J(μ))` and a counter `fomCounter` that is incremented on every full-order solve — this is the metric the experiments report.
+All models expose the same `getFuncAndGradient(μ)` interface returning $(J(\mu), \nabla J(\mu))$ and a counter `fomCounter` that is incremented on every full-order solve — this is the metric the experiments report.
 
 ## Reproducing the paper
 
