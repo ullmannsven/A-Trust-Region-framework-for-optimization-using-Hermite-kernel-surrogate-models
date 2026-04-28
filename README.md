@@ -1,6 +1,6 @@
 # A Trust-Region Framework for Optimization using Hermite Kernel Surrogate Models
 
-Reference implementation accompanying the paper
+Implementation accompanying the paper
 
 > **A trust-region framework for optimization using Hermite kernel surrogate models**
 > S. Ullmann, T. Ehring, R. Herkert, B. Haasdonk
@@ -9,7 +9,7 @@ This repository contains the Python code that reproduces all numerical experimen
 
 ## What the method does
 
-For a parameter-to-output map $J : \mu \to J(\mu)$ whose evaluation involves solving a PDE, classical optimizers (BFGS, trust-constr, ROL) call the FOM and its adjoint many times. HKTR replaces these calls with a *Hermite kernel surrogate* that interpolates both function values and gradients of $J$ at a small set of training parameters, and embeds the surrogate in a trust-region loop with a rigorous a-posteriori error estimator based on the kernel power function and the RKHS norm. The surrogate is updated on the fly: new FOM evaluations are added when needed, and points are removed when the Gram matrix becomes ill-conditioned or when they fall outside the current trust region. The numerical examples in the paper (and in this repo) show that this leads to reductions in the number of FOM evaluations needed to reach a given optimization tolerance.
+For a parameter-to-output map $J : \mu \to J(\mu)$ whose evaluation involves solving a PDE, classical optimizers call the FOM and its adjoint (to obtain the gradient) many times. HKTR replaces these calls with a *Hermite kernel surrogate* that interpolates both function values and gradients of $J$ at a small set of training parameters, and embeds the surrogate in a trust-region loop with a rigorous a-posteriori error estimator based on the kernel power function and the RKHS norm. The surrogate is updated on the fly: new FOM evaluations are added when needed, and points are removed when the Gram matrix becomes ill-conditioned or when they fall outside the current trust region. The numerical examples in the paper (and in this repo) show that this leads to reductions in the number of FOM evaluations needed to reach a given optimization tolerance.
 
 
 ## The kernels (`functions/HKTR/kernel.py`)
@@ -19,7 +19,7 @@ Five radial kernels are implemented; each provides the value $\varphi(r)$, the r
 | Class | Kernel | Used in |
 |---|---|---|
 | `Gauss` | $\exp(- \varepsilon r^2)$ | 1D example |
-| `QuadMatern` | $\exp(- \varepsilon r) (3 + 3\varepsilon r + (\varepsilon r)^2)` | 2D example |
+| `QuadMatern` | $\exp(- \varepsilon r) (3 + 3\varepsilon r + (\varepsilon r)^2)$ | 2D example |
 | `QuadWendland` | Wendland-type compactly supported kernel | 12D and 9D nonlinear example |
 | `InvMulti` | Inverse multiquadric | available |
 | `LinMatern` | Linear Matern | available |
@@ -35,11 +35,11 @@ The main entry point is `tr_Kernel(model, kernel, TR_parameters)`. One outer ite
 3. Use the kernel a-posteriori estimator 
 
   ```math
-  \| J - J^{(i)} \| \leq P_X(\mu) \| J \|_{\mathcal{H}_k(\mathcal{P})}
+  \| J - J^{(i)}\| \leq P_X(\mu) \|J \|_{\mathcal{H}_k(\mathcal{P})}
   ```
 
   to decide whether to **accept** the candidate, **reject** it (and shrink the radius by $\beta_1$), or accept conditionally after a FOM check.
-  
+
 4. Update the training set: append the new point, remove points farther than `max_amount_interpolation_points` from the iterate (`remove_far_away_points`), and remove near-duplicates that would push the Gram matrix above `cond_threshold` (`remove_similar_points`).
 5. Optionally enlarge the radius (factor $\frac{1}{\beta_1}$) when the actual-vs-predicted reduction ratio exceeds $\rho$.
 
