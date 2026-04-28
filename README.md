@@ -32,9 +32,12 @@ The main entry point is `tr_Kernel(model, kernel, TR_parameters)`. One outer ite
 
 1. Build the Hermite kernel surrogate $J^{(i)}$ by interpolating $(J, \nabla J)$ at the current set of training points.
 2. Solve the subproblem (`solve_subproblem_scipyBFGS`): minimize the Hermite kernel surrogate using SciPy's L-BFGS-B with a custom callback that terminates as soon as the iterate reaches the trust-region boundary.
-3. Use the kernel a-posteriori estimator ```math
+3. Use the kernel a-posteriori estimator 
+
+```math
 \| J - J^{(i)} \| \leq P_X(\mu) \| J \|_{\mathcal{H}_k(\mathcal{P})}
 ```
+
 to decide whether to **accept** the candidate, **reject** it (and shrink the radius by $\beta_1$), or accept conditionally after a FOM check.
 4. Update the training set: append the new point, remove points farther than `max_amount_interpolation_points` from the iterate (`remove_far_away_points`), and remove near-duplicates that would push the Gram matrix above `cond_threshold` (`remove_similar_points`).
 5. Optionally enlarge the radius (factor $\frac{1}{\beta_1}$) when the actual-vs-predicted reduction ratio exceeds $\rho$.
