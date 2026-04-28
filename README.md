@@ -9,9 +9,7 @@ This repository contains the Python code that reproduces all numerical experimen
 
 ## What the method does
 
-For a parameter-to-output map `J : μ ↦ J(μ)` whose evaluation involves solving a PDE, classical optimizers (BFGS, trust-constr, ROL) call the FOM and its adjoint many times. HKTR replaces these calls with a *Hermite kernel surrogate* that interpolates **both function values and gradients** of `J` at a small set of training parameters, and embeds the surrogate in a trust-region loop with a rigorous a-posteriori error estimator based on the kernel power function and the RKHS norm. The surrogate is updated on the fly: new FOM evaluations are added when needed, and points are removed when the Gram matrix becomes ill-conditioned or when they fall outside the current trust region.
-
-Compared with standard gradient-based optimizers, the trust-region acceptance test uses surrogate-only quantities, so most outer iterations cost no FOM solves at all. The numerical examples in the paper (and in this repo) show that this leads to substantial reductions in the number of FOM evaluations needed to reach a given optimization tolerance.
+For a parameter-to-output map `J : μ ↦ J(μ)` whose evaluation involves solving a PDE, classical optimizers (BFGS, trust-constr, ROL) call the FOM and its adjoint many times. HKTR replaces these calls with a *Hermite kernel surrogate* that interpolates **both function values and gradients** of `J` at a small set of training parameters, and embeds the surrogate in a trust-region loop with a rigorous a-posteriori error estimator based on the kernel power function and the RKHS norm. The surrogate is updated on the fly: new FOM evaluations are added when needed, and points are removed when the Gram matrix becomes ill-conditioned or when they fall outside the current trust region. The numerical examples in the paper (and in this repo) show that this leads to reductions in the number of FOM evaluations needed to reach a given optimization tolerance.
 
 ## Repository layout
 
@@ -40,24 +38,17 @@ Compared with standard gradient-based optimizers, the trust-region acceptance te
 
 ## The kernels (`functions/kernel.py`)
 
-Five radial kernels are implemented; each provides the value `φ(r)`, the rescaled first derivative `φ'(r)/r`, the rescaled second derivative `(φ'/r)'/r`, and a NumPy assembly of the Hermite Gram matrix. The Gauss, QuadMatern, and InvMulti classes additionally provide PyTorch versions used when the kernel width γ is treated as an optimization variable (`gamma_adaptive=True`).
+Five radial kernels are implemented; each provides the value `φ(r)`, the rescaled first derivative `φ'(r)/r`, the rescaled second derivative `(φ'/r)'/r`, and a NumPy assembly of the Hermite Gram matrix. The Gauss, QuadMatern, and InvMulti classes additionally provide PyTorch versions used when the kernel width is treated as an optimization variable (`gamma_adaptive=True`). Note that in the current version of the paper, results regarding an adaptive shape parameter are not reported. 
 
 | Class | Kernel | Used in |
 |---|---|---|
 | `Gauss` | `exp(-γ r²)` | 1D example |
-| `QuadMatern` | `exp(-γ r) (3 + 3γr + γ²r²)` (Matern with quadratic factor) | 2D example |
+| `QuadMatern` | `exp(-γ r) (3 + 3γr + γ²r²)` | 2D example |
 | `QuadWendland` | Wendland-type compactly supported kernel | 12D and 9D nonlinear example |
 | `InvMulti` | Inverse multiquadric | available |
 | `LinMatern` | Linear Matern | available |
 
-The Hermite Gram matrix is the block matrix
-
-```
-| K(x_i, x_j)        ∂_y K(x_i, x_j) |
-| ∂_x K(x_i, x_j)    ∂²_{xy} K(x_i, x_j) |
-```
-
-which is what makes the surrogate interpolate both `J` and `∇J` at every training point. Implementation is based on **VKOGA** (https://github.com/GabrieleSantin/VKOGA), with the Hermite extension specific to this work.
+The Hermite Gram matrix is a block matrix which makes the surrogate interpolate both `J` and `∇J` at every training point. Implementation is based on **VKOGA** (https://github.com/GabrieleSantin/VKOGA), with the Hermite extension specific to this work, following `https://link.springer.com/article/10.1007/s10444-024-10128-5`. 
 
 ## The HKTR algorithm (`functions/kernel_width_hermite_TR.py`)
 
@@ -150,10 +141,10 @@ The output is a pandas DataFrame with columns `gamma`, `avg. FOM evals.`, `avg. 
 
 The code combines a numerical-analysis stack with two PDE frameworks:
 
-- **Core numerics:** NumPy, SciPy, pandas, matplotlib, PyTorch (used for autograd over γ).
+- **Core numerics:** NumPy, SciPy, pandas, matplotlib, PyTorch (used for autograd over shape parameter, not part of the current version of the paper).
 - **pyMOR** (https://github.com/pymor/pymor) — drives the 2D and 12D PDE-constrained problems and provides the parameter-space machinery.
 - **FEniCSx / DOLFINx** (`dolfinx`, `ufl`, `mpi4py`, `petsc4py`) — used by the 9-parameter semilinear identification problem (`NonlinearModel`).
-- **pyROL** (Trilinos ROL Python bindings) — only required for `examples/run_4d_rol.py`.
+- **pyROL** (Trilinos ROL Python bindings); only required for `examples/run_4d_rol.py`.
 
 The 12D files in `pyMORAuxData/twelve_dim_*.py` are reused from [Tim Keil's `Proj-Newton-NCD-corrected-TR-RB-for-pde-opt`](https://github.com/TiKeil/Proj-Newton-NCD-corrected-TR-RB-for-pde-opt) and contain more functionality than is exercised by the experiments here. The kernel code in `functions/kernel.py` is based on **VKOGA** (https://github.com/GabrieleSantin/VKOGA) extended with the Hermite Gram matrix construction.
 
@@ -162,9 +153,7 @@ The 12D files in `pyMORAuxData/twelve_dim_*.py` are reused from [Tim Keil's `Pro
 From the repository root:
 
 ```bash
-python -m examples.run_2D_hktr
-# or, equivalently:
-python examples/run_2D_hktr.py
+python -m examples.1D.run_1D_hktr
 ```
 
 The 1D example is light and finishes in seconds. The 2D and 4D examples run in minutes on a laptop. The 12D building-floor example is heavy — each FOM evaluation involves solving a parametric stationary diffusion problem on a fine mesh, and one full sweep over `gamma_list × amount_of_iters` can take a while.
