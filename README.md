@@ -12,19 +12,19 @@ This repository contains the Python code that reproduces all numerical experimen
 For a parameter-to-output map `J : μ ↦ J(μ)` whose evaluation involves solving a PDE, classical optimizers (BFGS, trust-constr, ROL) call the FOM and its adjoint many times. HKTR replaces these calls with a *Hermite kernel surrogate* that interpolates **both function values and gradients** of `J` at a small set of training parameters, and embeds the surrogate in a trust-region loop with a rigorous a-posteriori error estimator based on the kernel power function and the RKHS norm. The surrogate is updated on the fly: new FOM evaluations are added when needed, and points are removed when the Gram matrix becomes ill-conditioned or when they fall outside the current trust region. The numerical examples in the paper (and in this repo) show that this leads to reductions in the number of FOM evaluations needed to reach a given optimization tolerance.
 
 
-## The kernels (`functions/kernel.py`)
+## The kernels (`functions/HKTR/kernel.py`)
 
-Five radial kernels are implemented; each provides the value `φ(r)`, the rescaled first derivative `φ'(r)/r`, the rescaled second derivative `(φ'/r)'/r`, and a NumPy assembly of the Hermite Gram matrix. The Gauss, QuadMatern, and InvMulti classes additionally provide PyTorch versions used when the kernel width is treated as an optimization variable (`gamma_adaptive=True`). Note that in the current version of the paper, results regarding an adaptive shape parameter are not reported. 
+Five radial kernels are implemented; each provides the value $\varphi(r)$, the rescaled first derivative $\varphi'(r)/r$, the rescaled second derivative $(\varphi^\prime(r)/r$, and a NumPy assembly of the Hermite Gram matrix. The `Gauss`, `QuadMatern`, and `InvMulti` classes additionally provide PyTorch versions used when the kernel width is treated as an optimization variable (`gamma_adaptive=True`). Note that in the current version of the paper, results regarding an adaptive shape parameter are not reported. 
 
 | Class | Kernel | Used in |
 |---|---|---|
 | `Gauss` | $\exp(- \varepsilon r^2)$ | 1D example |
-| `QuadMatern` | `exp(-γ r) (3 + 3γr + γ²r²)` | 2D example |
+| `QuadMatern` | $\exp(- \varepsilon r) (3 + 3\varepsilon r + (\varepsilon r)^2)` | 2D example |
 | `QuadWendland` | Wendland-type compactly supported kernel | 12D and 9D nonlinear example |
 | `InvMulti` | Inverse multiquadric | available |
 | `LinMatern` | Linear Matern | available |
 
-The Hermite Gram matrix is a block matrix which makes the surrogate interpolate both `J` and `∇J` at every training point. Implementation is based on **VKOGA** (https://github.com/GabrieleSantin/VKOGA), with the Hermite extension specific to this work, following [Ehring et al.](https://link.springer.com/article/10.1007/s10444-024-10128-5). 
+The Hermite Gram matrix is a block matrix which makes the surrogate interpolate both $J$ and $\nabla J$ at every training point. Implementation is based on **VKOGA** (https://github.com/GabrieleSantin/VKOGA), with the Hermite extension specific to this work, following [Ehring et al.](https://link.springer.com/article/10.1007/s10444-024-10128-5). 
 
 ## The HKTR algorithm (`functions/HKTR/kernel_width_hermite_TR.py`)
 
@@ -83,34 +83,10 @@ The following table maps scripts to paper artefacts (per the original `readme.md
 
 Each `run_*_hktr.py` script declares
 - a list `gamma_list` of kernel widths to sweep,
-- `amount_of_iters = 5` random starting points (fixed seeds 0..4),
+- `amount_of_iters = 5` random starting points (fixed seeds),
 - a `TR_parameters` dictionary,
 
-then calls `optimize_all` (which runs HKTR for every (γ, seed) pair) and prints a results table averaged over starting points.
-
-Example: `examples/run_2D_hktr.py`
-
-```python
-import functions.model as models
-import functions.results_analysis as result_analysis
-
-gamma_list = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6]
-amount_of_iters = 5
-model = models.twoDStuff()
-
-TR_parameters = {
-    'radius': 1, 'sub_tolerance': 1e-4,
-    'max_iterations': 100, 'max_iterations_subproblem': 30,
-    'FOC_tolerance': 1e-4, 'J_tolerance': 1e-12,
-    'beta_1': 0.5, 'beta_2': 0.95, 'rho': 0.9,
-    'max_amount_interpolation_points': 10,
-    'cond_threshold': 1e20, 'gamma_adaptive': False,
-}
-
-optim_data = result_analysis.optimize_all(model, gamma_list, TR_parameters, amount_of_iters)
-result_analysis.report_kernel_TR(optim_data, gamma_list, amount_of_iters)
-```
-
+then calls `optimize_all` (which runs HKTR for every ($\varepsilon$, seed) pair) and prints a results table averaged over starting points.
 The output is a pandas DataFrame with columns `gamma`, `avg. FOM evals.`, `avg. FOC condition`, `avg. error in J`.
 
 ## Dependencies
@@ -120,9 +96,9 @@ The code combines a numerical-analysis stack with two PDE frameworks:
 - **Core numerics:** NumPy, SciPy, pandas, matplotlib, PyTorch (used for autograd over shape parameter, not part of the current version of the paper).
 - **pyMOR** (https://github.com/pymor/pymor) — drives the 2D and 12D PDE-constrained problems and provides the parameter-space machinery.
 - **FEniCSx / DOLFINx** (`dolfinx`, `ufl`, `mpi4py`, `petsc4py`) — used by the 9-parameter semilinear identification problem (`NonlinearModel`).
-- **pyROL** (Trilinos ROL Python bindings); only required for `examples/run_4d_rol.py`.
+- **pyROL** (Trilinos ROL Python bindings); only required for `examples/9D/run_4d_rol.py`.
 
-The 12D files in `pyMORAuxData/twelve_dim_*.py` are reused from [Tim Keil's `Proj-Newton-NCD-corrected-TR-RB-for-pde-opt`](https://github.com/TiKeil/Proj-Newton-NCD-corrected-TR-RB-for-pde-opt) and contain more functionality than is exercised by the experiments here. The kernel code in `functions/kernel.py` is based on **VKOGA** (https://github.com/GabrieleSantin/VKOGA) extended with the Hermite Gram matrix construction.
+The files in `functions/models/pyMORAuxData/twelve_dim_*.py` are reused from [Tim Keil's `Proj-Newton-NCD-corrected-TR-RB-for-pde-opt`](https://github.com/TiKeil/Proj-Newton-NCD-corrected-TR-RB-for-pde-opt) and contain more functionality than is exercised by the experiments here.
 
 ## Running an experiment
 
@@ -132,6 +108,4 @@ From the repository root:
 python -m examples.1D.run_1D_hktr
 ```
 
-The 1D example is light and finishes in seconds. The 2D and 4D examples run in minutes on a laptop. The 12D building-floor example is heavy — each FOM evaluation involves solving a parametric stationary diffusion problem on a fine mesh, and one full sweep over `gamma_list × amount_of_iters` can take a while.
-
-Console output during a run includes per-iteration trust-region radius adjustments, the candidate parameter, the surrogate-vs-FOM reduction, and removal events when points are pruned from the kernel training set.
+The 1D example is light and finishes in seconds. The 2D and 9D examples run in minutes on a laptop. The 12D building-floor example is heavy — each FOM evaluation involves solving a parametric stationary diffusion problem on a fine mesh, and one full sweep over `gamma_list × amount_of_iters` can take a while.
