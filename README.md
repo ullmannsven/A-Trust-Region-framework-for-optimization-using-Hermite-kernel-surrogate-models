@@ -56,7 +56,7 @@ The main entry point is `tr_Kernel(model, kernel, TR_parameters)`. One outer ite
 
 1. Build the Hermite kernel surrogate $J^{(i)}$ by interpolating $(J, \nabla J)$ at the current set of training points.
 2. Solve the subproblem (`solve_subproblem_scipyBFGS`): minimize the Hermite kernel surrogate using SciPy's L-BFGS-B with a custom callback that terminates as soon as the iterate reaches the trust-region boundary.
-3. Use the kernel a-posteriori estimator $ \Vert J - J^{(i)} \Vert ≤ P_X(\mu) \Vert J \Vert_{\mathcal{H}_k(\mathcal{P})}$ to decide whether to **accept** the candidate, **reject** it (and shrink the radius by $\beta_1$), or accept conditionally after a FOM check.
+3. Use the kernel a-posteriori estimator $ \Vert J - J^{(i)} \Vert \leq P_X(\mu) \Vert J \Vert_{\mathcal{H}_k(\mathcal{P})}$ to decide whether to **accept** the candidate, **reject** it (and shrink the radius by $\beta_1$), or accept conditionally after a FOM check.
 4. Update the training set: append the new point, remove points farther than `max_amount_interpolation_points` from the iterate (`remove_far_away_points`), and remove near-duplicates that would push the Gram matrix above `cond_threshold` (`remove_similar_points`).
 5. Optionally enlarge the radius (factor $\frac{1}{\beta_1}$) when the actual-vs-predicted reduction ratio exceeds $\rho$.
 
@@ -78,7 +78,7 @@ The RKHS norm needed for the error estimator is either supplied analytically by 
 | `cond_threshold` | maximum tolerated condition number of the Gram matrix |
 | `gamma_adaptive` | whether to optimize γ jointly with μ |
 
-## The four test problems (`functions/model.py`)
+## The four test problems (`functions/models/model.py`)
 
 | Class | dim | Type | Source / FOM |
 |---|---|---|---|
@@ -95,15 +95,12 @@ The following table maps scripts to paper artefacts (per the original `readme.md
 
 | Script | Reproduces |
 |---|---|
-| `examples/run_1D_hktr.py`  | 1D row of Table 1 |
-| `examples/run_2D_hktr.py`  | 2D row of Table 3 |
-| `examples/run_12D_hktr.py` | 12D row of Table 5 |
-| `examples/run_1D_scipy_bfgs.py` / `..._trust_constr.py` | L-BFGS-B / trust-constr rows of Table 2 |
-| `examples/run_2D_scipy_*.py` | corresponding rows of Table 4 |
-| `examples/run_12D_scipy_bfgs.py` | L-BFGS-B row of Table 6 |
-| `examples/run_4d_nonlinear_hktr.py` | HKTR results on the 9-parameter semilinear identification |
-| `examples/run_4d_rol.py` | pyROL Lin-More baseline on the same problem |
-| `examples/run_4d_scipy_*.py` | SciPy baselines on the same problem |
+| `examples/1D/run_1D_hktr.py`  | Table 1 |
+| `examples/9D/run_9D_hktr.py`  | Table 5 |
+| `examples/12D/run_12D_hktr.py` | Table 3 |
+| `examples/1D/run_1D_scipy_*.py` | L-BFGS-B / trust-constr rows of Table 2 |
+| `examples/9D/run_9D_scipy_*.py` | L-BFGS-B / trust-constr rows of Table 6 |
+| `examples/12D/run_12D_scipy_*.py` | L-BFGS-B / trust-constr rows of Table 4 |
 
 Each `run_*_hktr.py` script declares
 - a list `gamma_list` of kernel widths to sweep,
