@@ -1,10 +1,6 @@
-import sys
-import os
-sys.path.append(os.path.join(os.path.dirname(__file__), 'pyMORAuxData'))
-sys.path.append(os.path.join(os.path.dirname(__file__), 'functions'))
 
-import functions.model as models
-import functions.results_analysis as result_analysis
+import functions.models.model as models
+import functions.analysis.results_analysis as result_analysis
 
 
 gamma_list = [0.725, 0.75, 1, 2, 10]

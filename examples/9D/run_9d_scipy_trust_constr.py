@@ -1,5 +1,5 @@
-import functions.model as models
-import functions.scipy_algos as scipy_algos
+import functions.models.model as models
+import functions.analysis.scipy_algos as scipy_algos
 import numpy as np
 
 amount_of_iters = 5

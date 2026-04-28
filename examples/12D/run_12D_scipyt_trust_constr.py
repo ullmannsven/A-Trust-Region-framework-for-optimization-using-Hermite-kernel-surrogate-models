@@ -1,11 +1,5 @@
-import sys
-import os
-sys.path.append(os.path.join(os.path.dirname(__file__), 'pyMORAuxData'))
-sys.path.append(os.path.join(os.path.dirname(__file__), 'functions'))
-
-import functions.model as models
-import functions.scipy_algos as scipy_algos
-
+import functions.models.model as models
+import functions.analysis.scipy_algos as scipy_algos
 
 amount_of_iters = 5
 model  = models.buildingFloor()
