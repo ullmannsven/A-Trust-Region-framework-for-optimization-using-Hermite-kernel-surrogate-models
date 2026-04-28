@@ -9,12 +9,12 @@ This repository contains the Python code that reproduces all numerical experimen
 
 ## What the method does
 
-For a parameter-to-output map `J : μ ↦ J(μ)` whose evaluation involves solving a PDE, classical optimizers (BFGS, trust-constr, ROL) call the FOM and its adjoint many times. HKTR replaces these calls with a *Hermite kernel surrogate* that interpolates **both function values and gradients** of `J` at a small set of training parameters, and embeds the surrogate in a trust-region loop with a rigorous a-posteriori error estimator based on the kernel power function and the RKHS norm. The surrogate is updated on the fly: new FOM evaluations are added when needed, and points are removed when the Gram matrix becomes ill-conditioned or when they fall outside the current trust region. The numerical examples in the paper (and in this repo) show that this leads to reductions in the number of FOM evaluations needed to reach a given optimization tolerance.
+For a parameter-to-output map $J : \mu \to J(\mu)$ whose evaluation involves solving a PDE, classical optimizers (BFGS, trust-constr, ROL) call the FOM and its adjoint many times. HKTR replaces these calls with a *Hermite kernel surrogate* that interpolates both function values and gradients of $J$ at a small set of training parameters, and embeds the surrogate in a trust-region loop with a rigorous a-posteriori error estimator based on the kernel power function and the RKHS norm. The surrogate is updated on the fly: new FOM evaluations are added when needed, and points are removed when the Gram matrix becomes ill-conditioned or when they fall outside the current trust region. The numerical examples in the paper (and in this repo) show that this leads to reductions in the number of FOM evaluations needed to reach a given optimization tolerance.
 
 
 ## The kernels (`functions/HKTR/kernel.py`)
 
-Five radial kernels are implemented; each provides the value $\varphi(r)$, the rescaled first derivative $\varphi'(r)/r$, the rescaled second derivative $(\varphi^\prime(r)/r$, and a NumPy assembly of the Hermite Gram matrix. The `Gauss`, `QuadMatern`, and `InvMulti` classes additionally provide PyTorch versions used when the kernel width is treated as an optimization variable (`gamma_adaptive=True`). Note that in the current version of the paper, results regarding an adaptive shape parameter are not reported. 
+Five radial kernels are implemented; each provides the value $\varphi(r)$, the rescaled first derivative $\varphi'(r)/r$, the rescaled second derivative $(\varphi^\prime r)^\prime / r$, and a NumPy assembly of the Hermite Gram matrix. The `Gauss`, `QuadMatern`, and `InvMulti` classes additionally provide PyTorch versions used when the kernel width is treated as an optimization variable (`gamma_adaptive=True`). Note that in the current version of the paper, results regarding an adaptive shape parameter are not reported. 
 
 | Class | Kernel | Used in |
 |---|---|---|
@@ -32,9 +32,9 @@ The main entry point is `tr_Kernel(model, kernel, TR_parameters)`. One outer ite
 
 1. Build the Hermite kernel surrogate $J^{(i)}$ by interpolating $(J, \nabla J)$ at the current set of training points.
 2. Solve the subproblem (`solve_subproblem_scipyBFGS`): minimize the Hermite kernel surrogate using SciPy's L-BFGS-B with a custom callback that terminates as soon as the iterate reaches the trust-region boundary.
-3. Use the kernel a-posteriori estimator $$
+3. Use the kernel a-posteriori estimator ```math
 \| J - J^{(i)} \| \leq P_X(\mu) \| J \|_{\mathcal{H}_k(\mathcal{P})}
-$$ 
+```
 to decide whether to **accept** the candidate, **reject** it (and shrink the radius by $\beta_1$), or accept conditionally after a FOM check.
 4. Update the training set: append the new point, remove points farther than `max_amount_interpolation_points` from the iterate (`remove_far_away_points`), and remove near-duplicates that would push the Gram matrix above `cond_threshold` (`remove_similar_points`).
 5. Optionally enlarge the radius (factor $\frac{1}{\beta_1}$) when the actual-vs-predicted reduction ratio exceeds $\rho$.
