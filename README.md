@@ -48,7 +48,7 @@ Five radial kernels are implemented; each provides the value `φ(r)`, the rescal
 | `InvMulti` | Inverse multiquadric | available |
 | `LinMatern` | Linear Matern | available |
 
-The Hermite Gram matrix is a block matrix which makes the surrogate interpolate both `J` and `∇J` at every training point. Implementation is based on **VKOGA** (https://github.com/GabrieleSantin/VKOGA), with the Hermite extension specific to this work, following `https://link.springer.com/article/10.1007/s10444-024-10128-5`. 
+The Hermite Gram matrix is a block matrix which makes the surrogate interpolate both `J` and `∇J` at every training point. Implementation is based on **VKOGA** (https://github.com/GabrieleSantin/VKOGA), with the Hermite extension specific to this work, following https://link.springer.com/article/10.1007/s10444-024-10128-5. 
 
 ## The HKTR algorithm (`functions/kernel_width_hermite_TR.py`)
 
