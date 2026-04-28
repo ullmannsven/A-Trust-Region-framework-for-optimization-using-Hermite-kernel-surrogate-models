@@ -35,7 +35,7 @@ from pymor.parameters.functionals import GenericParameterFunctional, ConstantPar
 from pymor.parameters.base import ParametricObject
 from pymor.vectorarrays.numpy import NumpyVectorSpace
 
-from twelve_dim_model import QuadraticPdeoptStationaryModel
+from pyMORAuxData.twelve_dim_model import QuadraticPdeoptStationaryModel
 from pymor.discretizers.builtin.grids.rect import RectGrid
 
 def _construct_mu_bar(problem):

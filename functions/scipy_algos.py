@@ -28,6 +28,10 @@ def fom_objective_functional(model, mu):
     elif model.dim == 2:
         value_FOM = model.fom.output(mu)[0,0]
 
+    #4D (nonlinear example)
+    elif model.dim == 9:
+        value_FOM = model.compute_objective(mu)
+
     #12D
     elif model.dim == 12:
         mu_mor = model.fom.parameters.parse(mu)
@@ -50,6 +54,7 @@ def fom_gradient_of_functional(model, mu):
     value_FOM_grad
         The value of the gradient of the FOM at the parameter |mu|.
     """
+
     if model.dim == 1:
         mu = np.atleast_2d(mu)
         value_FOM_grad = 2*mu[0,0]* np.exp(-mu[0,0]**2) - ((3 * mu[0,0] * np.exp(- 0.001 * mu[0,0]**2)) / 500)
@@ -57,6 +62,10 @@ def fom_gradient_of_functional(model, mu):
     elif model.dim == 2:
         mu = np.atleast_2d(mu)
         value_FOM_grad = model.fom.output_d_mu(model.fom.parameters.parse(mu)).to_numpy()
+
+    elif model.dim == 9:
+        mu = np.atleast_2d(mu)
+        value_FOM_grad = model.compute_gradient(mu)
 
     elif model.dim == 12:
         mu_mor = model.fom.parameters.parse(mu)
@@ -133,6 +142,15 @@ def optimize_all_iters(amount_of_iters, method, model):
         elif dim == 2:
             np.random.seed(i)
             mu_k = np.random.uniform(0.5, np.pi, size=2)
+        elif dim == 9:
+            np.random.seed(i)
+            mu_k = np.random.uniform(model.parameter_space[0], model.parameter_space[1], size=dim)
+            print("Initial parameter", mu_k)
+            # ranges_coeff = model.parameter_space['coeff']
+            # ranges_width = model.parameter_space['width']
+            # mu_k_coeff = np.random.uniform(ranges_coeff[0], ranges_coeff[1], size=9)
+            # mu_k_width = np.random.uniform(ranges_width[0], ranges_width[1], size=9)
+            # mu_k = np.r_[mu_k_coeff, mu_k_width]
         elif dim == 12:
             with new_rng(i):
                 mu_k = model.parameter_space.sample_randomly(1)[0].to_numpy()
@@ -152,9 +170,13 @@ def optimize_all_iters(amount_of_iters, method, model):
         elif dim == 2:
             data['J_error'][0,0] += abs((fom_result.fun - 2.3917078761)/(2.3917078761))
             #data['foc'][0,0] += abs(fom_result['jac'][0])
-
+        
+        elif dim == 9: 
+            data['J_error'][0,0] += abs(fom_result.fun - 3.22918e-06)
+            
         elif dim == 12: 
             data['J_error'][0,0]  += abs((fom_result.fun - 5.813965062384796)/(5.813965062384796))
+        
         else: 
             raise NotImplementedError
 
@@ -219,6 +241,26 @@ def optimize(J, data, mu, method, model=None):
                       options = {'gtol': 1e-4})
         else: 
             raise NotImplementedError
+
+    elif dim == 9:
+        bounds = [model.parameter_space] * model.dim
+        if method == 'bfgs': 
+            result = minimize(fun = partial(record_results, J, data, model),
+                      x0 = mu,
+                      method = 'L-BFGS-B',
+                      jac = partial(record_results_jac, fom_gradient_of_functional, data, model),
+                      bounds = bounds,
+                      options = {'gtol': 7.5e-5, 'ftol':1e-12})
+        elif method == 'trust-constr': 
+            result = minimize(fun = partial(record_results, J, data, model),
+                      x0 = mu,
+                      method = 'trust-constr',
+                      jac = partial(record_results_jac, fom_gradient_of_functional, data, model),
+                      bounds = bounds,
+                      options = {'gtol': 5e-7})
+        else: 
+            raise NotImplementedError
+        
         
     elif dim == 12: 
         ranges_door = (0.05, 0.2)

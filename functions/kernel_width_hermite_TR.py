@@ -4,7 +4,7 @@ from scipy.optimize import minimize
 import scipy as sp
 import torch
 from torch.func import jacfwd, jacrev
-import kernel as kernels
+import functions.kernel as kernels
 
 def projection_onto_range(model, X_train):
     """Projects the parameter |mu| onto the given range of the parameter space.
@@ -35,31 +35,51 @@ def projection_onto_range(model, X_train):
                     if X_train[i,j] > range_[1]:
                         X_train_new[i,j] = range_[1]
                     index += 1
-        else: #the 1D case
+        # if isinstance(model.parameter_space, dict): #nonlinear example
+        #     index = 1
+        #     for key in model.parameter_space.keys():
+        #         range_ = model.parameter_space[key]
+        #         for i in range((index-1)*model.n_gauss, index * model.n_gauss):
+        #             if X_train[i,j] < range_[0]: 
+        #                 X_train_new[i,j] = range_[0]
+        #             if X_train[i,j] > range_[1]: 
+        #                 X_train_new[i,j] = range_[1]
+        #         index +=1
+        else: #1D Case
             range_ = model.parameter_space
-            if X_train[0,j] < range_[0]: 
-                X_train_new[0,j] = range_[0]
-            if X_train[0,j] > range_[1]: 
-                X_train_new[0,j] = range_[1]
-        
+            for i in range(model.dim):
+                if X_train[i,j] < range_[0]: 
+                    X_train_new[i,j] = range_[0]
+                if X_train[i,j] > range_[1]: 
+                    X_train_new[i,j] = range_[1]
+
     return X_train_new
 
 
 def computeDataForRKHSNorm(model, TR_parameters):
     from pymor.tools.random import new_rng
 
-    amount             = 10
-    dim                = model.dim
-    
-    with new_rng(amount):
-        random_samples     = model.parameter_space.sample_randomly(amount)
+    amount = 10
+    dim    = model.dim
+
+    if model.pyMOR:
+        with new_rng(amount):
+            random_samples = model.parameter_space.sample_randomly(amount).to_numpy()
+    # elif model.dim == 18: 
+    #     np.random.seed(amount)
+    #     random_samples = [np.r_[np.random.uniform(model.parameter_space['coeff'][0], model.parameter_space['coeff'][1], size=model.n_gauss), 
+    #                             np.random.uniform(model.parameter_space['width'][0], model.parameter_space['width'][1], size=model.n_gauss) 
+    #                             ] for _ in range(amount)]
+    else: #1d example
+        np.random.seed(amount)
+        random_samples = [np.random.uniform(model.parameter_space[0], model.parameter_space[1], size=model.dim) for _ in range(amount)]
     
     train_values       = np.zeros((dim, amount))
     target_values      = np.zeros((amount, 1))
     grad_target_values = np.zeros((dim, amount))
 
     for i in range(amount):
-        mu                                           = random_samples[i].to_numpy()
+        mu                                           = random_samples[i]
         train_values[:,i]                            = mu
         target_values[i, 0], grad_target_values[:,i] = model.getFuncAndGradient(mu)
 
@@ -274,6 +294,11 @@ def solve_subproblem_scipyBFGS(model, kernel, alpha, X_train, rhs, mu_k, TR_para
                 ranges_gamma = (0.05, 30)
                 result_BFGS_oneiter = minimize(penalized_objective, mu_k[:,0], callback=callback, method='L-BFGS-B', bounds=(ranges, ranges, ranges_gamma), jac=partial_gradient, options = {'maxiter': 1, 'disp': False})
 
+            elif dim == 9: 
+                ranges = model.parameter_space
+                ranges_gamma = (0.01, 100)
+                result_BFGS_oneiter = minimize(penalized_objective, mu_k[:, 0], callback=callback, method='L-BFGS-B', bounds=(ranges, ranges, ranges, ranges, ranges, ranges, ranges, ranges, ranges, ranges_gamma), jac=partial_grad_func_noGamma, options = {'gtol': TR_parameters['sub_tolerance'], 'maxiter': TR_parameters['max_iterations_subproblem']})
+
             elif dim == 12: 
                 ranges_0 = (0.05, 0.2)
                 ranges_1 = (0, 100)
@@ -299,6 +324,11 @@ def solve_subproblem_scipyBFGS(model, kernel, alpha, X_train, rhs, mu_k, TR_para
                 ranges_gamma = (0.05, 30)
                 result_BFGS = minimize(penalized_objective, result_BFGS_oneiter['x'], callback=callback, method='L-BFGS-B', bounds=(ranges, ranges, ranges_gamma), jac=partial_gradient, options = {'gtol': TR_parameters['sub_tolerance'], 'maxiter': TR_parameters['max_iterations_subproblem']})
 
+            elif dim == 9: 
+                ranges = model.parameter_space
+                ranges_gamma = (0.01, 100)
+                result_BFGS = minimize(penalized_objective, result_BFGS_oneiter['x'], callback=callback, method='L-BFGS-B', bounds=(ranges, ranges, ranges, ranges, ranges, ranges, ranges, ranges, ranges, ranges_gamma), jac=partial_grad_func_noGamma, options = {'gtol': TR_parameters['sub_tolerance'], 'maxiter': TR_parameters['max_iterations_subproblem']})
+
             elif dim == 12: 
                 ranges_0 = (0.05, 0.2)
                 ranges_1 = (0, 100)
@@ -323,6 +353,10 @@ def solve_subproblem_scipyBFGS(model, kernel, alpha, X_train, rhs, mu_k, TR_para
                 ranges = (0.5, np.pi)
                 result_BFGS_oneiter = minimize(penalized_objective, mu_k[:-1,0], method='L-BFGS-B', bounds=(ranges, ranges), jac=partial_grad_func_noGamma, options = {'maxiter': 1, 'disp': False})
 
+            elif dim == 9:
+                bounds = [model.parameter_space] * model.dim
+                result_BFGS_oneiter = minimize(penalized_objective, mu_k[:-1, 0], callback=callback, method='L-BFGS-B', bounds=bounds, jac=partial_grad_func_noGamma, options = {'gtol': TR_parameters['sub_tolerance'], 'maxiter': TR_parameters['max_iterations_subproblem']})
+
             elif dim == 12: 
                 ranges_0 = (0.05, 0.2)
                 ranges_1 = (0, 100)
@@ -344,6 +378,10 @@ def solve_subproblem_scipyBFGS(model, kernel, alpha, X_train, rhs, mu_k, TR_para
             elif dim == 2: 
                 ranges = (0.5, np.pi)
                 result_BFGS = minimize(penalized_objective, result_BFGS_oneiter['x'], callback=callback, method='L-BFGS-B', bounds=(ranges, ranges), jac=partial_grad_func_noGamma, options = {'gtol': TR_parameters['sub_tolerance'], 'maxiter': TR_parameters['max_iterations_subproblem']})
+
+            elif dim == 9: 
+                bounds = [model.parameter_space] * model.dim
+                result_BFGS = minimize(penalized_objective, result_BFGS_oneiter['x'], callback=callback, method='L-BFGS-B', bounds=bounds, jac=partial_grad_func_noGamma, options = {'gtol': TR_parameters['sub_tolerance'], 'maxiter': TR_parameters['max_iterations_subproblem']})
 
             elif dim == 12: 
                 ranges_0 = (0.05, 0.2)

@@ -1,6 +1,7 @@
 import numpy as np
 import abc
 import torch
+import math
 
 
 class Kernel(metaclass=abc.ABCMeta):
@@ -303,9 +304,9 @@ class QuadWendland(Kernel):
         self.l        = np.floor(d/2)+ 2 + 1 
         self.gamma    = gamma
         
-    def phi(self,r):   return (np.math.factorial(int(self.l + 2*2)) / np.math.factorial(int(self.l))) * (self.gamma*r<=1) * (1-self.gamma*r)**(self.l+2) * ((self.l**2+4*self.l+3)*(self.gamma*r)**2+(3*self.l+6)*self.gamma*r+3)  
-    def phiR(self,r):  return (np.math.factorial(int(self.l + 2*2)) / np.math.factorial(int(self.l))) *(self.gamma*r<=1) * (1-self.gamma*r)**(self.l+1) * (-self.gamma**2) * (12+7*self.l+self.l**2)*(1+(1+self.l)*self.gamma*r)
-    def phiRR(self,r): return (np.math.factorial(int(self.l + 2*2)) / np.math.factorial(int(self.l))) * (self.gamma*r<=1) * (1-self.gamma*r)**(self.l) * self.gamma**4 * (24 + 50 * self.l + 35 *  self.l**2 + 10 *  self.l**3 + self.l**4) 
+    def phi(self,r):   return (math.factorial(int(self.l + 2*2)) / math.factorial(int(self.l))) * (self.gamma*r<=1) * (1-self.gamma*r)**(self.l+2) * ((self.l**2+4*self.l+3)*(self.gamma*r)**2+(3*self.l+6)*self.gamma*r+3)  
+    def phiR(self,r):  return (math.factorial(int(self.l + 2*2)) / math.factorial(int(self.l))) *(self.gamma*r<=1) * (1-self.gamma*r)**(self.l+1) * (-self.gamma**2) * (12+7*self.l+self.l**2)*(1+(1+self.l)*self.gamma*r)
+    def phiRR(self,r): return (math.factorial(int(self.l + 2*2)) / math.factorial(int(self.l))) * (self.gamma*r<=1) * (1-self.gamma*r)**(self.l) * self.gamma**4 * (24 + 50 * self.l + 35 *  self.l**2 + 10 *  self.l**3 + self.l**4) 
 
 
 class QuadMatern(Kernel):
