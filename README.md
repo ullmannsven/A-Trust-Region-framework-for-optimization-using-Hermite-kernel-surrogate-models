@@ -38,10 +38,8 @@ The main entry point is `tr_Kernel(model, kernel, TR_parameters)`. One outer ite
   \| J - J^{(i)} \| \leq P_X(\mu) \| J \|_{\mathcal{H}_k(\mathcal{P})}
   ```
 
-to decide whether to **accept** the candidate, **reject** it (and shrink the radius by $\beta_1$), or accept conditionally after a FOM check.
-
+  to decide whether to **accept** the candidate, **reject** it (and shrink the radius by $\beta_1$), or accept conditionally after a FOM check.
 4. Update the training set: append the new point, remove points farther than `max_amount_interpolation_points` from the iterate (`remove_far_away_points`), and remove near-duplicates that would push the Gram matrix above `cond_threshold` (`remove_similar_points`).
-
 5. Optionally enlarge the radius (factor $\frac{1}{\beta_1}$) when the actual-vs-predicted reduction ratio exceeds $\rho$.
 
 If `gamma_adaptive=True`, the kernel width $\varepsilon$ is appended as an extra coordinate to the parameter, and its gradient is computed via PyTorch autograd (`compute_gradientGamma`). In the experiments shipped here `gamma_adaptive=False` is used and $\varepsilon$ is swept manually via `gamma_list`.
