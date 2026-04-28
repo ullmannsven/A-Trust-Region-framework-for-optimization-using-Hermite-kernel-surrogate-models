@@ -170,19 +170,3 @@ python examples/run_2D_hktr.py
 The 1D example is light and finishes in seconds. The 2D and 4D examples run in minutes on a laptop. The 12D building-floor example is heavy — each FOM evaluation involves solving a parametric stationary diffusion problem on a fine mesh, and one full sweep over `gamma_list × amount_of_iters` can take a while.
 
 Console output during a run includes per-iteration trust-region radius adjustments, the candidate parameter, the surrogate-vs-FOM reduction, and removal events when points are pruned from the kernel training set.
-
-## Citation
-
-If you use this code, please cite the paper:
-
-```
-@article{ullmann2026hktr,
-  title  = {A trust-region framework for optimization using Hermite kernel surrogate models},
-  author = {Ullmann, S. and Ehring, T. and Herkert, R. and Haasdonk, B.},
-  year   = {2026}
-}
-```
-
-## Repository
-
-https://github.com/ullmannsven/A-Trust-Region-framework-for-optimization-using-Hermite-kernel-surrogate-models
