@@ -5,8 +5,8 @@ pd.set_option("display.precision", 3)
 
 from matplotlib import pyplot as plt
 from scipy.spatial import ConvexHull
-from functions.kernel_width_hermite_TR import tr_Kernel
-import functions.kernel as kernels
+from functions.HKTR.kernel_width_hermite_TR import tr_Kernel
+import functions.HKTR.kernel as kernels
 
 def prepare_data(model, amount_of_iters, gamma_list=None):
     """ Creats a dictionary |data| to save relevant information about the optimization algorithm. """

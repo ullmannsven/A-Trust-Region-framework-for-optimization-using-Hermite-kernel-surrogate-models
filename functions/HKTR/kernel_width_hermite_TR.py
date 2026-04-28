@@ -4,7 +4,7 @@ from scipy.optimize import minimize
 import scipy as sp
 import torch
 from torch.func import jacfwd, jacrev
-import functions.kernel as kernels
+import functions.HKTR.kernel as kernels
 
 def projection_onto_range(model, X_train):
     """Projects the parameter |mu| onto the given range of the parameter space.

@@ -1,7 +1,6 @@
 
-import functions.model as models
-import functions.results_analysis as result_analysis
-import functions.scipy_algos as scipy_algos
+import functions.models.model as models
+import functions.analysis.results_analysis as result_analysis
 import numpy as np
 
 model = models.NonlinearModel()

@@ -18,6 +18,7 @@ import numpy as np
 
 from pymor.core.base import ImmutableObject
 from pymor.discretizers.builtin import discretize_stationary_cg
+from pymor.discretizers.builtin.grids.rect import RectGrid
 from pymor.analyticalproblems.functions import ConstantFunction, LincombFunction
 from pymor.discretizers.builtin.grids.referenceelements import square
 from pymor.discretizers.builtin.grids.boundaryinfos import EmptyBoundaryInfo
@@ -35,8 +36,8 @@ from pymor.parameters.functionals import GenericParameterFunctional, ConstantPar
 from pymor.parameters.base import ParametricObject
 from pymor.vectorarrays.numpy import NumpyVectorSpace
 
-from pyMORAuxData.twelve_dim_model import QuadraticPdeoptStationaryModel
-from pymor.discretizers.builtin.grids.rect import RectGrid
+from functions.models.pyMORAuxData.twelve_dim_model import QuadraticPdeoptStationaryModel
+
 
 def _construct_mu_bar(problem):
     mu_bar = []

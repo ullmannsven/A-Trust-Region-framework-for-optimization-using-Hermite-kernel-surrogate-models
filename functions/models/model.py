@@ -1,9 +1,9 @@
 import numpy                as np
 import abc
-from   pymor.basic import *
-from   pymor.core.logger import set_log_levels, getLogger
-from   pyMORAuxData      import twelve_dim_discretizer  
-from   pyMORAuxData      import problems  
+from pymor.basic import *
+from pymor.core.logger import set_log_levels, getLogger
+from functions.models.pyMORAuxData import twelve_dim_discretizer  
+from functions.models.pyMORAuxData import problems  
 from pathlib import Path
 from dolfinx import io
 
