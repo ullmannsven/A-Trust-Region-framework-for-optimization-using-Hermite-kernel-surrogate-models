@@ -48,13 +48,13 @@ Five radial kernels are implemented; each provides the value `φ(r)`, the rescal
 | `InvMulti` | Inverse multiquadric | available |
 | `LinMatern` | Linear Matern | available |
 
-The Hermite Gram matrix is a block matrix which makes the surrogate interpolate both `J` and `∇J` at every training point. Implementation is based on **VKOGA** (https://github.com/GabrieleSantin/VKOGA), with the Hermite extension specific to this work, following https://link.springer.com/article/10.1007/s10444-024-10128-5. 
+The Hermite Gram matrix is a block matrix which makes the surrogate interpolate both `J` and `∇J` at every training point. Implementation is based on **VKOGA** (https://github.com/GabrieleSantin/VKOGA), with the Hermite extension specific to this work, following T. Ehrings work on Hermite kernel surrogates https://link.springer.com/article/10.1007/s10444-024-10128-5. 
 
-## The HKTR algorithm (`functions/kernel_width_hermite_TR.py`)
+## The HKTR algorithm (`functions/HKTR/kernel_width_hermite_TR.py`)
 
 The main entry point is `tr_Kernel(model, kernel, TR_parameters)`. One outer iteration does the following:
 
-1. Build the Hermite kernel surrogate `s_k` by interpolating `(J, ∇J)` at the current set of training points.
+1. Build the Hermite kernel surrogate $J^{(i)}$ by interpolating $(J, \nable J)$ at the current set of training points.
 2. **Subproblem (`solve_subproblem_scipyBFGS`):** minimize `s_k` using SciPy's L-BFGS-B with a custom callback that terminates as soon as the iterate reaches the trust-region boundary (measured via the kernel power function × RKHS norm vs. `β₂ · radius`), and a penalty term enforcing the trust-region constraint inside the subproblem objective.
 3. Use the kernel a-posteriori estimator `‖J - s_k‖ ≤ P_X(μ) · ‖J‖_RKHS` to decide whether to **accept** the candidate, **reject** it (and shrink the radius by `β₁`), or accept conditionally after a FOM check.
 4. Update the training set: append the new point, remove points farther than `max_amount_interpolation_points` from the iterate (`remove_far_away_points`), and remove near-duplicates that would push the Gram matrix above `cond_threshold` (`remove_similar_points`).
