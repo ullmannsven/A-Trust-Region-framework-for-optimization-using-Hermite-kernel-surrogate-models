@@ -57,6 +57,7 @@ def optimize_all(model, gamma_list, TR_parameters, amount_of_iters):
             kernel = kernels.QuadMatern(gamma=gamma_list[j])
         elif model.dim == 9: 
             kernel = kernels.QuadWendland(gamma=gamma_list[j], d=model.dim)
+            #kernel = kernels.InvMulti(gamma=gamma_list[j])
         elif model.dim == 12: 
             kernel = kernels.QuadWendland(gamma=gamma_list[j], d=model.dim)
         else: 

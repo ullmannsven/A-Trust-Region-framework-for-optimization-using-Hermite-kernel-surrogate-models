@@ -12,10 +12,10 @@ J_test_ref = model.compute_objective(w_ref)
 
 print("the misfit for the reference solution is", J_test_ref)
 
-gamma_list = [0.01, 0.011]
+gamma_list = [0.006]
 amount_of_iters = 5
 
-TR_parameters={'radius': 1, 'sub_tolerance': 7.5e-5, 'max_iterations': 100, 'max_iterations_subproblem': 30, 'FOC_tolerance': 7.5e-5, 'J_tolerance': 1e-12,
+TR_parameters={'radius': 1, 'sub_tolerance': 7.5e-4, 'max_iterations': 100, 'max_iterations_subproblem': 30, 'FOC_tolerance': 7.5e-4, 'J_tolerance': 1e-12,
                'beta_1': 0.5, 'beta_2': 0.95, 'rho': 0.9, 'max_amount_interpolation_points': 20, 'cond_threshold': 1e20, 'gamma_adaptive': False}
 
 optim_data = result_analysis.optimize_all(model, gamma_list, TR_parameters, amount_of_iters)

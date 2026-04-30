@@ -59,7 +59,7 @@ The RKHS norm needed for the error estimator is either supplied analytically by 
 | `rho` | actual/predicted reduction threshold for radius enlargement |
 | `max_amount_interpolation_points` | size cap on the kernel training set |
 | `cond_threshold` | maximum tolerated condition number of the Gram matrix |
-| `gamma_adaptive` | whether to optimize γ jointly with μ |
+| `gamma_adaptive` | whether to optimize $\varepsilon jointly with $\mu |
 
 ## The four test problems (`functions/models/model.py`)
 
