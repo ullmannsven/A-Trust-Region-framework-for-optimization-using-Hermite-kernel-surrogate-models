@@ -1,15 +1,15 @@
-
 import functions.models.model as models
 import functions.analysis.results_analysis as result_analysis
+import math as m
 
 
-gamma_list = [0.725, 0.75, 1, 2, 10]
+gamma_list = [1/m.sqrt(2) + 1e-6, 0.75, 1, 2, 10]
 amount_of_iters = 5
 model = models.Gaussian1D()
 
 
 TR_parameters={'radius': 1, 'sub_tolerance': 1e-7, 'max_iterations': 100, 'max_iterations_subproblem': 30, 'FOC_tolerance': 1e-7, 'J_tolerance': 1e-14,
-               'beta_1': 0.5, 'beta_2': 0.95, 'rho': 0.9, 'max_amount_interpolation_points': 5, 'cond_threshold': 1e17, 'gamma_adaptive': False}
+               'beta_1': 0.5, 'beta_2': 0.95, 'rho': 0.9, 'max_amount_interpolation_points': 5, 'cond_threshold': 1e19, 'gamma_adaptive': False}
 
 
 optim_data = result_analysis.optimize_all(model, gamma_list, TR_parameters, amount_of_iters)
