@@ -98,7 +98,7 @@ The output is a pandas DataFrame with columns `gamma`, `avg. FOM evals.`, `avg. 
 The code combines a numerical-analysis stack with two PDE frameworks:
 
 - **Core numerics:** NumPy, SciPy, pandas, matplotlib, PyTorch (used for autograd over shape parameter, not part of the current version of the paper).
-- **pyMOR** (https://github.com/pymor/pymor) — drives the 2D and 12D PDE-constrained problems and provides the parameter-space machinery.
+- **pyMOR** (https://github.com/pymor/pymor) — drives the 2D and 12D PDE-constrained problems and provides the parameter-space machinery. Note that to reproduce the 12D experiment the pyMOR version 2021.2 should be used. 
 - **FEniCSx / DOLFINx** (`dolfinx`, `ufl`, `mpi4py`, `petsc4py`) — used by the 9-parameter semilinear identification problem (`NonlinearModel`).
 - **pyROL** (Trilinos ROL Python bindings); only required for `examples/9D/run_4d_rol.py`.
 
