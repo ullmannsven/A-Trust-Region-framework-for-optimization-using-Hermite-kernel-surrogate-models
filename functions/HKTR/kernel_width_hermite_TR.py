@@ -65,11 +65,7 @@ def computeDataForRKHSNorm(model, TR_parameters):
     if model.pyMOR:
         with new_rng(amount):
             random_samples = model.parameter_space.sample_randomly(amount).to_numpy()
-    # elif model.dim == 18: 
-    #     np.random.seed(amount)
-    #     random_samples = [np.r_[np.random.uniform(model.parameter_space['coeff'][0], model.parameter_space['coeff'][1], size=model.n_gauss), 
-    #                             np.random.uniform(model.parameter_space['width'][0], model.parameter_space['width'][1], size=model.n_gauss) 
-    #                             ] for _ in range(amount)]
+    
     else: #1d example
         np.random.seed(amount)
         random_samples = [np.random.uniform(model.parameter_space[0], model.parameter_space[1], size=model.dim) for _ in range(amount)]
@@ -519,6 +515,8 @@ def tr_Kernel(model, kernel, TR_parameters):
                     kernel = kernels.Gauss(gamma=mu_kp1[-1,0])
                 elif dim == 2: 
                     kernel = kernels.QuadMatern(gamma=mu_kp1[-1,0])
+                elif dim == 9: 
+                    kernel = kernels.QuadWendland(gamma=mu_kp1[-1,0], d=model.dim)
                 elif dim == 12: 
                     kernel = kernels.QuadWendland(gamma=mu_kp1[-1,0], d=model.dim)
                 else: 

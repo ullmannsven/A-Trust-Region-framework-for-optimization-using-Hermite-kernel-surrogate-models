@@ -57,7 +57,6 @@ def optimize_all(model, gamma_list, TR_parameters, amount_of_iters):
             kernel = kernels.QuadMatern(gamma=gamma_list[j])
         elif model.dim == 9: 
             kernel = kernels.QuadWendland(gamma=gamma_list[j], d=model.dim)
-            #kernel = kernels.InvMulti(gamma=gamma_list[j])
         elif model.dim == 12: 
             kernel = kernels.QuadWendland(gamma=gamma_list[j], d=model.dim)
         else: 
@@ -81,11 +80,6 @@ def optimize_all(model, gamma_list, TR_parameters, amount_of_iters):
 
             elif model.dim == 9:
                 np.random.seed(i)
-                # ranges_coeff = model.parameter_space['coeff']
-                # ranges_width = model.parameter_space['width']
-                # mu_k_coeff = np.random.uniform(ranges_coeff[0], ranges_coeff[1], size=9)
-                # mu_k_width = np.random.uniform(ranges_width[0], ranges_width[1], size=9)
-                # mu_k = np.r_[mu_k_coeff, mu_k_width]
                 mu_k = np.random.uniform(model.parameter_space[0], model.parameter_space[1], size=model.dim)
                 mu_k = np.append(np.atleast_2d(mu_k), np.atleast_2d(gamma_list[j]), axis=1).T
 
