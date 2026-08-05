@@ -56,10 +56,9 @@ def projection_onto_range(model, X_train):
     return X_train_new
 
 
-def computeDataForRKHSNorm(model, TR_parameters):
+def computeDataForRKHSNorm(model, TR_parameters, amount=10):
     from pymor.tools.random import new_rng
 
-    amount = 10
     dim    = model.dim
 
     if model.pyMOR:
