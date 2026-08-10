@@ -486,7 +486,6 @@ def tr_Kernel(model, kernel, TR_parameters):
                 estimator_J = model.compute_RKHS_norm(mu_kp1) * kernel.powerFuncSingle(mu_kp1[:-1,:], X_train[:-1,:])
         else: 
             if TR_parameters['gamma_adaptive']: 
-                
                 estimator_J = kernel.getRKHSNorm(RKHS_train_values, RKHS_rhs, newGamma=mu_kp1[-1,0]) * kernel.powerFuncSingle(mu_kp1[:-1,:], X_train[:-1,:], newGamma=mu_kp1[-1,0])
             else:
                 estimator_J = kernel.getRKHSNorm(RKHS_train_values, RKHS_rhs) * kernel.powerFuncSingle(mu_kp1[:-1,:], X_train[:-1,:])

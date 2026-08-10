@@ -296,12 +296,77 @@ class Kernel(metaclass=abc.ABCMeta):
 
         return np.r_[np.c_[K, B1], np.c_[B2, C]] 
 
+class LinearWendland(Kernel):
+    def __init__(self, gamma, d):
+        super().__init__()
 
+        self.l = int(np.floor(d / 2)) + 2
+        self.gamma = float(gamma)
+
+        # Same normalization convention as in QuadWendland.
+        self.factor = (
+            math.factorial(self.l + 2)
+            / math.factorial(self.l)
+        )
+
+    def phi(self, r):
+        r = np.asarray(r, dtype=float)
+        x = self.gamma * r
+        support = np.maximum(1.0 - x, 0.0)
+
+        return (
+            self.factor
+            * support ** (self.l + 1)
+            * (1.0 + (self.l + 1) * x)
+        )
+
+    def phiR(self, r):
+        """Return phi'(r) / r."""
+        r = np.asarray(r, dtype=float)
+        x = self.gamma * r
+        support = np.maximum(1.0 - x, 0.0)
+
+        return (
+            -self.factor
+            * self.gamma**2
+            * (self.l + 1)
+            * (self.l + 2)
+            * support**self.l
+        )
+
+    def phiRR(self, r):
+        """Return (1/r) * d/dr(phi'(r) / r)."""
+        r = np.asarray(r, dtype=float)
+        x = self.gamma * r
+        support = np.maximum(1.0 - x, 0.0)
+
+        numerator = (
+            self.factor
+            * self.gamma**4
+            * self.l
+            * (self.l + 1)
+            * (self.l + 2)
+            * support ** (self.l - 1)
+        )
+
+        result = np.zeros_like(x, dtype=float)
+
+        # phiRR itself is singular at r=0. In radial derivative formulas,
+        # however, it is multiplied by an outer product of displacement
+        # vectors, whose limit is zero. We therefore define it as zero there.
+        np.divide(
+            numerator,
+            x,
+            out=result,
+            where=(x > 0.0) & (x < 1.0),
+        )
+
+        return result
 
 class QuadWendland(Kernel):
     def __init__(self,gamma,d):
         super().__init__()
-        self.l        = np.floor(d/2)+ 2 + 1 
+        self.l        = np.floor(d/2) + 2 + 1 
         self.gamma    = gamma
         
     def phi(self,r):   return (math.factorial(int(self.l + 2*2)) / math.factorial(int(self.l))) * (self.gamma*r<=1) * (1-self.gamma*r)**(self.l+2) * ((self.l**2+4*self.l+3)*(self.gamma*r)**2+(3*self.l+6)*self.gamma*r+3)  
