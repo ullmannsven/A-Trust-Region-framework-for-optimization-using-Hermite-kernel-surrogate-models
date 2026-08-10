@@ -401,9 +401,10 @@ def solve_subproblem_scipyBFGS(model, kernel, alpha, X_train, rhs, mu_k, TR_para
 
     J_kp1   = result_BFGS['fun']
     J_AGC   = result_BFGS_oneiter['fun']
-    success  = result_BFGS['success']
+    mu_AGC  = np.atleast_2d(np.r_[result_BFGS_oneiter['x'], mu_k[-1,0]]).reshape(-1,1)
+    success = result_BFGS['success']
     
-    return mu_kp1, J_AGC, J_kp1, gradient, success
+    return mu_kp1, J_AGC, mu_AGC, J_kp1, gradient, success
 
 
 def tr_Kernel(model, kernel, TR_parameters):
@@ -420,6 +421,7 @@ def tr_Kernel(model, kernel, TR_parameters):
     J_diff         = np.inf
     point_rejected = False
     success        = True
+    fallback_counter = 0
 
     J_FOM_k, grad_J_FOM_k = model.getFuncAndGradient(mu_k[:-1,:])
 
@@ -466,7 +468,7 @@ def tr_Kernel(model, kernel, TR_parameters):
         rhs = np.r_[y_train, grad_y_train.flatten(order='F').reshape(-1,1)]
 
         print("_________ starting the subproblem __________________")
-        mu_kp1, J_AGC, J_kp1, gradient_kp1, success = solve_subproblem_scipyBFGS(model, kernel, alpha, X_train, rhs, mu_k, TR_parameters, RKHS_train_values, RKHS_rhs)
+        mu_kp1, J_AGC, mu_AGC, J_kp1, gradient_kp1, success = solve_subproblem_scipyBFGS(model, kernel, alpha, X_train, rhs, mu_k, TR_parameters, RKHS_train_values, RKHS_rhs)
         print("_________ done solving the subproblem ______________")
 
         if not success:
@@ -520,21 +522,41 @@ def tr_Kernel(model, kernel, TR_parameters):
                 else: 
                     raise NotImplementedError
                  
-            alpha = np.linalg.solve(kernel.getGramHermite(X_train[:-1, :], X_train[:-1, :]), np.r_[y_train, grad_y_train.flatten(order='F').reshape(-1,1)])
-
             if len(y_train) >= 2 and abs(y_train[-2] - J_kp1) > np.finfo(float).eps:
                 if ((y_train[-2] - y_train[-1])/(y_train[-2] - J_kp1)) >= TR_parameters['rho']:
                         if TR_parameters['radius'] < 1:
                             TR_parameters['radius'] *= 1/(TR_parameters['beta_1'])
                             print("Enlarging the TR radius to {}".format(TR_parameters['radius']))
 
-            mu_list.append(mu_kp1[0,:])
-            
-            J_diff   = abs(J_k - J_FOM_kp1) / np.max([abs(J_k), abs(J_FOM_kp1), 1])
-            mu_k     = mu_kp1
-            J_k      = J_FOM_kp1
-            gradient = grad_J_FOM_kp1
+            #Saftey fallback to to underestimation of estimator_J
+            if J_FOM_kp1 > J_AGC: 
+                fallback_counter += 1
+                print("wie oft bin ich hier", fallback_counter)
+                J_AGC_exact, grad_J_AGC_exact = model.getFuncAndGradient(mu_AGC[:-1, :])
+
+                X_train      = np.append(X_train, mu_AGC, axis=1)
+                y_train      = np.append(y_train, np.atleast_2d(J_AGC_exact), axis=0)
+                grad_y_train = np.append(grad_y_train, np.atleast_2d(grad_J_AGC_exact).reshape(-1,1), axis=1)
+
+                X_train, y_train, grad_y_train = remove_far_away_points(X_train, y_train, grad_y_train, mu_AGC, TR_parameters)
+                X_train, y_train, grad_y_train = remove_similar_points(X_train, y_train, grad_y_train, kernel, mu_AGC[-1,0], TR_parameters)
+
+                alpha = np.linalg.solve(kernel.getGramHermite(X_train[:-1, :], X_train[:-1, :]), np.r_[y_train, grad_y_train.flatten(order='F').reshape(-1,1)])
+                
+                J_diff   = abs(J_k - J_AGC_exact) / np.max([abs(J_k), abs(J_AGC_exact), 1])
+                mu_k     = mu_AGC
+                J_k      = J_AGC_exact
+                gradient = grad_J_AGC_exact
+
+            else: 
+                alpha = np.linalg.solve(kernel.getGramHermite(X_train[:-1, :], X_train[:-1, :]), np.r_[y_train, grad_y_train.flatten(order='F').reshape(-1,1)])
+                J_diff   = abs(J_k - J_FOM_kp1) / np.max([abs(J_k), abs(J_FOM_kp1), 1])
+                mu_k     = mu_kp1
+                J_k      = J_FOM_kp1
+                gradient = grad_J_FOM_kp1
+
             success  = True
+            mu_list.append(mu_k[0, :])
 
 
         elif J_kp1 - estimator_J > J_AGC:
@@ -614,6 +636,7 @@ def tr_Kernel(model, kernel, TR_parameters):
             k += 1
 
     print("\n************************************* \n")
+    print("FALLBACK COUNTER", fallback_counter)
 
     if k > TR_parameters['max_iterations']:
         print("WARNING: Maximum number of iteration for the TR algorithm reached")

@@ -1,6 +1,8 @@
 from pymor.basic import *
 import numpy as np
 import pandas as pd
+import functions.models.model as models
+
 pd.set_option("display.precision", 3)
 
 from matplotlib import pyplot as plt
@@ -56,6 +58,11 @@ def optimize_all(model, gamma_list, TR_parameters, amount_of_iters):
         elif model.dim == 2: 
             kernel = kernels.QuadMatern(gamma=gamma_list[j])
         elif model.dim == 9: 
+            if j > 0:
+                model = models.NonlinearModel()
+                w_ref = np.array([0, 3, 7, 10, 0, 1, 2, 0, 10])
+                u_ref = model.compute_reference_from_weights(w_ref)
+                J_test_ref = model.compute_objective(w_ref)
             kernel = kernels.QuadWendland(gamma=gamma_list[j], d=model.dim)
             #kernel = kernels.LinearWendland(gamma=gamma_list[j], d=model.dim)
         elif model.dim == 12: 
