@@ -2,8 +2,7 @@ import numpy as np
 from functools import partial
 from scipy.optimize import minimize
 import scipy as sp
-import torch
-from torch.func import jacfwd, jacrev
+#import torch
 import functions.HKTR.kernel as kernels
 
 def projection_onto_range(model, X_train):
@@ -59,13 +58,13 @@ def projection_onto_range(model, X_train):
 def computeDataForRKHSNorm(model, TR_parameters, amount=10):
     from pymor.tools.random import new_rng
 
-    dim    = model.dim
+    dim = model.dim
 
     if model.pyMOR:
         with new_rng(amount):
-            random_samples = model.parameter_space.sample_randomly(amount).to_numpy()
-    
-    else: #1d example
+            random_samples_list = model.parameter_space.sample_randomly(amount)
+            random_samples = [sample.to_numpy() for sample in random_samples_list]
+    else:
         np.random.seed(amount)
         random_samples = [np.random.uniform(model.parameter_space[0], model.parameter_space[1], size=model.dim) for _ in range(amount)]
     

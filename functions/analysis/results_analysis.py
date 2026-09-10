@@ -5,8 +5,8 @@ import functions.models.model as models
 
 pd.set_option("display.precision", 3)
 
-from matplotlib import pyplot as plt
-from scipy.spatial import ConvexHull
+#from matplotlib import pyplot as plt
+#from scipy.spatial import ConvexHull
 from functions.HKTR.kernel_width_hermite_TR import tr_Kernel
 import functions.HKTR.kernel as kernels
 
@@ -117,7 +117,10 @@ def optimize_all(model, gamma_list, TR_parameters, amount_of_iters):
             #Save Data
             if model.dim == 1: 
                 data['mu_error'][j,0] += np.linalg.norm(mu_k[:-1,:] - np.array([[0]]))
-                data['J_error'][j,0]  += abs((J_k - 2) / 2)
+                # Evaluate J(mu) - J(0) directly to avoid cancellation near mu = 0.
+                mu_squared = mu_k[0,0]**2
+                objective_gap = -np.expm1(-mu_squared) + 3 * np.expm1(-0.001 * mu_squared)
+                data['J_error'][j,0] += abs(objective_gap / 2)
 
             elif model.dim == 2:
                 data['mu_error'][j,0] += np.linalg.norm(mu_k[:-1,:] - np.array([[1.4246656], [3.14159265]]))
@@ -168,7 +171,7 @@ def report_kernel_TR(data, gamma_list, amount_of_iters):
     }
 
     df = pd.DataFrame(data_new)
-    print(df)
+    print(df.to_string(formatters={'avg. error in J': '{:.16e}'.format}))
 
 
                   

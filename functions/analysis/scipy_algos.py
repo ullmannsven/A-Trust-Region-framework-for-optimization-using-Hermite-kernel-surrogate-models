@@ -164,7 +164,10 @@ def optimize_all_iters(amount_of_iters, method, model):
 
         #Save Data
         if dim == 1: 
-            data['J_error'][0,0]  += abs((fom_result.fun - 2)/2)
+            # Evaluate J(mu) - J(0) directly to avoid cancellation near mu = 0.
+            mu_squared = fom_result.x[0]**2
+            objective_gap = -np.expm1(-mu_squared) + 3 * np.expm1(-0.001 * mu_squared)
+            data['J_error'][0,0] += abs(objective_gap / 2)
             #data['foc'][0,0] += abs(fom_result['jac'][0])
 
         elif dim == 2:
@@ -304,6 +307,6 @@ def report(data, amount_of_iters):
     print(f'  mu_min:    {data["mu"][-1,:]}') #takes the last one, assuming that all solution yield the same result.
     print(f'  J(mu_min): {data["J_min"][0,-1]}') #takes the last one, assuming that all solution yield the same result.
     print(f'  avg. FOM evals: {data["counter"]/amount_of_iters}')
-    print(f'  avg. error in J: {data["J_error"]/amount_of_iters}')
+    print(f'  avg. error in J: {data["J_error"][0,0]/amount_of_iters:.16e}')
     #print(f'  avg. FOC: {data["foc"]/amount_of_iters}')
     print('')

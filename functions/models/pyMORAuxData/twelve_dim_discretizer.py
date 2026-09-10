@@ -142,7 +142,7 @@ def discretize_quadratic_pdeopt_stationary_cg(problem, diameter=np.sqrt(2)/200.,
     constant_part = 0.5 * l2_u_d_squared
 
     # assemble output functional
-    from twelve_dim_theta import build_output_coefficient
+    from functions.models.pyMORAuxData.twelve_dim_theta import build_output_coefficient
 
     if weights is not None:
         weight_for_J = weights.pop('state')

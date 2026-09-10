@@ -88,7 +88,7 @@ class buildingFloor(Model):
                         'distributed_adaptive_discretizations': 'DEBUG',
                         'notebook': 'INFO'})
 
-        data_path = 'pyMORAuxData/EXC_data'
+        data_path = 'functions/models/pyMORAuxData/EXC_data'
 
         # domain of interest
         bounding_box = [[0,0],[2,1]]
@@ -145,6 +145,8 @@ import ufl
 
 class NonlinearModel(Model):
     def __init__(self, nx=128, ny=128, alpha=1e-8, centers=None, widths=None):
+        
+
         super().__init__()
         self.dim = 9
         self.alpha = alpha
